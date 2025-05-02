@@ -2,6 +2,35 @@ if (not game:IsLoaded()) then
     game.Loaded:Wait()
     task.wait(1)
 end
+-- Default settings
+local Settings = {
+    Fps = 30,
+    Saver = true,
+    WebhookEnabled = false,
+    WebhookInterval = 900, -- Default 15 minutes in seconds
+    WebhookUrl = ""
+}
+
+-- Merge user settings with defaults
+if _G.AutofarmSettings then
+    for k,v in pairs(_G.AutofarmSettings) do
+        if string.lower(k) == "webhooktime" then
+            Settings.WebhookInterval = v * 60 -- Convert minutes to seconds
+        elseif string.lower(k) == "webhookurl" then
+            Settings.WebhookUrl = v
+            Settings.WebhookEnabled = v ~= nil and v ~= ""
+        else
+            Settings[k] = v
+        end
+    end
+end
+
+_G.AutofarmSettings = Settings -- Make merged settings available globally
+
+if not game:IsLoaded() then 
+    game.Loaded:Wait()
+    task.wait(1)
+end
 
 repeat task.wait(0.1) until (game:GetService("Players").LocalPlayer) and (game:GetService("Players").LocalPlayer.Character)
 
@@ -42,7 +71,10 @@ _G.Disable = function()
 end
 
 local function SendWebhook()
-    if not _G.AutofarmSettings.WebhookEnabled or _G.AutofarmSettings.WebhookUrl == "" then return end
+    if not _G.AutofarmSettings.WebhookEnabled or _G.AutofarmSettings.WebhookUrl == "" then 
+        warn("Webhook not enabled or URL not set")
+        return 
+    end
     
     local currentCash = Player.DataFolder.Currency.Value
     local profit = currentCash - StartCash
@@ -111,6 +143,8 @@ local function SendWebhook()
     
     if not success then
         warn("Failed to send webhook:", response)
+    else
+        print("Webhook sent successfully")
     end
 end
 
@@ -211,6 +245,7 @@ local GetCashier = function()
         
         -- Send webhook notification if enabled and interval has passed
         if _G.AutofarmSettings.WebhookEnabled and os.time() - LastWebhookTime >= _G.AutofarmSettings.WebhookInterval then
+            print("Attempting to send webhook...")
             LastWebhookTime = os.time()
             SendWebhook()
         end
@@ -335,6 +370,7 @@ end
 if _G.AutofarmSettings.WebhookEnabled then
     task.spawn(function()
         task.wait(5)
+        print("Sending initial webhook...")
         SendWebhook()
     end)
 end
