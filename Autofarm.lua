@@ -3,34 +3,8 @@ if (not game:IsLoaded()) then
     task.wait(1)
 end
 
--- Default settings
-local Settings = {
-    Fps = 30,
-    Saver = true,
-    WebhookEnabled = false,
-    WebhookInterval = 900, -- Default 15 minutes in seconds
-    WebhookUrl = ""
-}
-
--- Merge user settings with defaults
-if _G.AutofarmSettings then
-    for k,v in pairs(_G.AutofarmSettings) do
-        if string.lower(k) == "webhooktime" then
-            Settings.WebhookInterval = v * 60 -- Convert minutes to seconds
-        elseif string.lower(k) == "webhookurl" then
-            Settings.WebhookUrl = v
-            Settings.WebhookEnabled = v ~= nil and v ~= ""
-        else
-            Settings[k] = v
-        end
-    end
-end
-
-_G.AutofarmSettings = Settings -- Make merged settings available globally
-
 repeat task.wait(0.1) until (game:GetService("Players").LocalPlayer) and (game:GetService("Players").LocalPlayer.Character)
 
--- UI Setup
 local SG = Instance.new("ScreenGui")
 SG.Parent = game:GetService("CoreGui")
 SG.Name = "abcdefg"
@@ -46,7 +20,6 @@ TL.AnchorPoint = Vector2.new(0.5, 0.5)
 TL.Position = UDim2.new(0.5, 0, 0.5, 0)
 TL.Size = UDim2.new(1, 0, 1, 0)
 
--- Variables
 local Player = game:GetService("Players").LocalPlayer
 local Cashiers = workspace.Cashiers 
 local Drop = workspace.Ignored.Drop
@@ -54,108 +27,12 @@ local Dis = false
 local Broken = 0 
 local StartTick = os.time()
 local LastCycleTime = os.time()
-local CycleCount = 0
-local LastWebhookTime = os.time()
-local StartCash = Player.DataFolder.Currency.Value
-local LastCashCollectionTime = os.time()
 
--- Functions
 _G.Disable = function()
     Dis = true
     game:GetService("RunService"):Set3dRenderingEnabled(true)
     setfpscap(60)
     game:GetService("CoreGui").abcdefg:Destroy()
-end
-
-local function SendWebhook()
-    if not _G.AutofarmSettings.WebhookEnabled or _G.AutofarmSettings.WebhookUrl == "" then 
-        warn("Webhook not enabled or URL not set")
-        return 
-    end
-    
-    local currentCash = Player.DataFolder.Currency.Value
-    local profit = currentCash - StartCash
-    local profitPercent = (profit / math.max(StartCash, 1)) * 100
-    
-    local embed = {
-        {
-            ["title"] = "💰 AutoFarm Update - " .. Player.Name,
-            ["description"] = string.format("Current farming session statistics"),
-            ["color"] = 65280, -- Green color
-            ["fields"] = {
-                {
-                    ["name"] = "Current Cash",
-                    ["value"] = "$"..tostring(currentCash):reverse():gsub("...","%0,",math.floor((#tostring(currentCash)-1)/3)):reverse(),
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Profit",
-                    ["value"] = "$"..tostring(profit):reverse():gsub("...","%0,",math.floor((#tostring(profit)-1)/3)):reverse()..string.format(" (%.2f%%)", profitPercent),
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "ATMs Broken",
-                    ["value"] = Broken,
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Cycles Completed",
-                    ["value"] = CycleCount,
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Session Duration",
-                    ["value"] = string.format("%02i:%02i:%02i", (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60),
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Time Since Last Cycle",
-                    ["value"] = string.format("%02i:%02i", (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60),
-                    ["inline"] = true
-                }
-            },
-            ["footer"] = {
-                ["text"] = os.date("%Y-%m-%d %H:%M:%S")
-            }
-        }
-    }
-    
-    local data = {
-        ["embeds"] = embed,
-        ["username"] = "AutoFarm Notifier",
-        ["avatar_url"] = "https://cdn.discordapp.com/attachments/123456789012345678/123456789012345678/money_bag.png"
-    }
-    
-    -- Using http_request from syn library for better reliability
-    local success, response = pcall(function()
-        if syn and syn.request then
-            return syn.request({
-                Url = _G.AutofarmSettings.WebhookUrl,
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
-                Body = game:GetService("HttpService"):JSONEncode(data)
-            })
-        else
-            -- Fallback to HttpService if syn isn't available
-            local http = game:GetService("HttpService")
-            return http:RequestAsync({
-                Url = _G.AutofarmSettings.WebhookUrl,
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
-                Body = http:JSONEncode(data)
-            })
-        end
-    end)
-    
-    if not success then
-        warn("Failed to send webhook:", response)
-    else
-        print("Webhook sent successfully")
-    end
 end
 
 Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
@@ -164,24 +41,11 @@ Player.CameraMinZoomDistance = 6
 
 TL.Text = "\n@"..Player.Name.."\n$999,999,999"
 
--- Anti-cheat bypass
-pcall(function()
-    local a=game:GetService("ReplicatedStorage").MainEvent
-    local b={"CHECKER_1","TeleportDetect","OneMoreTime"}
-    local c
-    c=hookmetamethod(game,"__namecall",function(...)
-        local d={...}
-        local self=d[1]
-        local e=getnamecallmethod()
-        if e=="FireServer" and self==a and table.find(b,d[2]) then 
-            return 
-        end 
-        return c(...)
-    end)
-end)
+pcall(function()local a=game:GetService("ReplicatedStorage").MainEvent;local b={"CHECKER_1","TeleportDetect","OneMoreTime"}local c;c=hookmetamethod(game,"__namecall",function(...)local d={...}local self=d[1]local e=getnamecallmethod()if e=="FireServer"and self==a and table.find(b,d[2])then return end return c(...)end)end)
 
 local Click = function(Part)
     local Input = game:GetService("VirtualInputManager")
+    local Pos = workspace.Camera:WorldToScreenPoint(Part.Position)
     local T = os.time()
 
     if (Part:GetAttribute("OriginalPos") == nil) then 
@@ -232,8 +96,6 @@ local GetCashier = function()
     -- Check if 4 minutes have passed to reset cashiers
     if os.time() - LastCycleTime >= 240 then -- 240 seconds = 4 minutes
         LastCycleTime = os.time()
-        CycleCount = CycleCount + 1
-        
         -- Reset cashiers to their original positions
         for i,v in pairs(Cashiers:GetChildren()) do 
             if (i == 15) then 
@@ -252,13 +114,6 @@ local GetCashier = function()
                 end
             end
         end
-        
-        -- Send webhook notification if enabled and interval has passed
-        if _G.AutofarmSettings.WebhookEnabled and os.time() - LastWebhookTime >= _G.AutofarmSettings.WebhookInterval then
-            print("Attempting to send webhook...")
-            LastWebhookTime = os.time()
-            SendWebhook()
-        end
     end
     
     for i,v in pairs(Cashiers:GetChildren()) do 
@@ -274,120 +129,54 @@ local To = function(CF)
     Player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
 end
 
--- Improved cash collection with timeout
-local function CollectCashWithTimeout(timeout)
-    local startTime = os.time()
-    local cashCollected = false
-    local cash = GetCash()
-    
-    while os.time() - startTime < timeout and not Dis do
-        if #cash > 0 then
-            for i,v in pairs(cash) do 
-                Click(v)
-                LastCashCollectionTime = os.time()
-                cashCollected = true
-            end
-            cash = GetCash() -- Refresh cash list
-        else
-            break
-        end
-        task.wait()
-    end
-    
-    return cashCollected
-end
-
--- Main farming loop with improved cycling
 task.spawn(function()
-    while not Dis do
-        if not Player.Character or not Player.Character:FindFirstChild("FULLY_LOADED_CHAR") then
-            task.wait(1)
-            continue
+    while true and task.wait() do 
+        if (Player.Character == nil) or (Player.Character:FindFirstChild("FULLY_LOADED_CHAR") == nil) or (Dis == true) then 
+            return print("NO")
         end
         
-        local cashier = GetCashier()
-        if not cashier then
-            task.wait(1)
-            continue
-        end
-        
-        -- Equip combat tool
-        local combat = Player.Backpack:FindFirstChild("Combat")
-        if combat and not Player.Character:FindFirstChild("Combat") then
-            combat.Parent = Player.Character
-            task.wait(0.5)
-        end
-        
-        -- Move to cashier and attack
-        To((cashier.Head.CFrame + Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0))
-        
-        local attackStart = os.time()
-        while cashier and cashier:FindFirstChild("Humanoid") and cashier.Humanoid.Health > 0 and not Dis do
-            if Player.Character:FindFirstChild("Combat") then
-                Player.Character.Combat:Activate()
+        local Cashier = nil
+        repeat 
+            Cashier = GetCashier()
+
+            if (Player.Backpack:FindFirstChild("Combat") ~= nil) then 
+                Player.Backpack.Combat.Parent = Player.Character 
             end
-            
-            -- Check if we've been attacking too long without success
-            if os.time() - attackStart > 60 then
-                warn("Attack timeout - moving to next cashier")
-                break
-            end
-            
+
             task.wait()
-        end
+        until (Cashier ~= nil)
         
-        if Dis then break end
-        
-        -- After defeating cashier
-        if cashier and cashier:FindFirstChild("Head") then
-            To(cashier.Head.CFrame + cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
-            Broken += 1
-            
-            -- Collect money with 60 second timeout
-            if not CollectCashWithTimeout(60) then
-                warn("Cash collection timeout - moving to next cashier")
+        repeat 
+            To( (Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0) ) 
+            task.wait()
+            Player.Character.Combat:Activate()
+        until (Cashier.Humanoid.Health <= 0)
+        Broken += 1
+
+        To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
+
+        for i,v in pairs(Player.Character:GetChildren()) do 
+            if (v:IsA("Tool")) then 
+                v.Parent = Player.Backpack 
             end
         end
         
-        -- Unequip tools
-        for _, tool in pairs(Player.Character:GetChildren()) do
-            if tool:IsA("Tool") then
-                tool.Parent = Player.Backpack
-            end
-        end
+        local Cash = GetCash()
         
-        task.wait(1)
+        for i,v in pairs(Cash) do 
+            Click(v)
+        end
     end
 end)
 
--- UI Update loop
+local StartCash = Player.DataFolder.Currency.Value
 task.spawn(function()
-    while not Dis and task.wait(0.5) do
-        local currentCash = Player.DataFolder.Currency.Value
-        local profit = currentCash - StartCash
-        local profitPercent = (profit / math.max(StartCash, 1)) * 100
-        
-        TL.Text = string.format([[
-@%s
-$%s
-ATMs: %d
-Cycles: %d
-Session: %02i:%02i:%02i
-Cycle: %02i:%02i
-Profit: $%s (%.2f%%)]],
-            Player.Name,
-            tostring(currentCash):reverse():gsub("...","%0,",math.floor((#tostring(currentCash)-1)/3)):reverse(),
-            Broken,
-            CycleCount,
-            (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60,
-            (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60,
-            tostring(profit):reverse():gsub("...","%0,",math.floor((#tostring(profit)-1)/3)):reverse(),
-            profitPercent
-        )
+    while true and task.wait(0.5) do 
+        print(TL.Text)
+        TL.Text = "\n@"..Player.Name.."\n$"..tostring(Player.DataFolder.Currency.Value):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value)-1)/3)):reverse().."\nATMS: "..tostring(Broken).."\n"..string.format("%02i:%02i:%02i", (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60).."\nProfit: $"..tostring(Player.DataFolder.Currency.Value-StartCash):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value-StartCash)-1)/3)):reverse().."\nCycle: "..string.format("%02i:%02i", (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60).."\n"..tostring(GetCashier()).."   "
     end
 end)
 
--- Anti-afk
 Player.Idled:Connect(function()
     for i = 1, 10 do 
         game:GetService("VirtualUser"):Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame) 
@@ -397,37 +186,22 @@ Player.Idled:Connect(function()
     end
 end)
 
--- Performance optimizations
 pcall(function() UserSettings().GameSettings.MasterVolume = 0 end)
 pcall(function() settings().Rendering.QualityLevel = "Level01" end)
 
--- Anti-sit
 Player.CharacterAdded:Connect(AntiSit)
 task.spawn(function()
     task.wait(3)
-    if Player.Character then
-        AntiSit(Player.Character)
-    end
+    AntiSit(Player.Character)
 end)
 
--- FPS settings
 for i = 1, 10 do 
     setfpscap(_G.AutofarmSettings.Fps)
     task.wait(0.1)
 end
 
--- Power saver mode
 if (_G.AutofarmSettings.Saver == true) then 
     game:GetService("RunService"):Set3dRenderingEnabled(false) 
 else 
     SG.Enabled = false
-end
-
--- Initial webhook notification
-if _G.AutofarmSettings.WebhookEnabled then
-    task.spawn(function()
-        task.wait(5)
-        print("Sending initial webhook...")
-        SendWebhook()
-    end)
 end
