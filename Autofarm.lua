@@ -71,16 +71,16 @@ local function SendWebhook()
         warn("Webhook not enabled or URL not set")
         return 
     end
-    
+
     local currentCash = Player.DataFolder.Currency.Value
     local profit = currentCash - StartCash
     local profitPercent = (profit / math.max(StartCash, 1)) * 100
-    
+
     local embed = {
         {
             ["title"] = "💰 AutoFarm Update - " .. Player.Name,
-            ["description"] = string.format("Current farming session statistics"),
-            ["color"] = 65280, -- Green color
+            ["description"] = "Current farming session statistics",
+            ["color"] = 65280, -- Green
             ["fields"] = {
                 {
                     ["name"] = "Current Cash",
@@ -94,12 +94,12 @@ local function SendWebhook()
                 },
                 {
                     ["name"] = "ATMs Broken",
-                    ["value"] = Broken,
+                    ["value"] = tostring(Broken),
                     ["inline"] = true
                 },
                 {
                     ["name"] = "Cycles Completed",
-                    ["value"] = CycleCount,
+                    ["value"] = tostring(CycleCount),
                     ["inline"] = true
                 },
                 {
@@ -118,28 +118,23 @@ local function SendWebhook()
             }
         }
     }
-    
+
     local data = {
         ["embeds"] = embed,
         ["username"] = "AutoFarm Notifier",
         ["avatar_url"] = "https://cdn.discordapp.com/attachments/123456789012345678/123456789012345678/money_bag.png"
     }
-    
-    -- New reliable webhook method
+
+    local HttpService = game:GetService("HttpService")
+
     local success, response = pcall(function()
-        local http = game:GetService("HttpService")
-        local json = http:JSONEncode(data)
-        
-        return http:RequestAsync({
-            Url = _G.AutofarmSettings.WebhookUrl,
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json"
-            },
-            Body = json
-        })
+        return HttpService:PostAsync(
+            _G.AutofarmSettings.WebhookUrl,
+            HttpService:JSONEncode(data),
+            Enum.HttpContentType.ApplicationJson
+        )
     end)
-    
+
     if not success then
         warn("Failed to send webhook:", response)
     else
