@@ -27,8 +27,6 @@ local Dis = false
 local Broken = 0 
 local StartTick = os.time()
 local LastCycleTime = os.time()
-local CycleCount = 0
-local MaxTimePerCashier = 12 -- Maximum time to spend on one cashier (seconds)
 
 _G.Disable = function()
     Dis = true
@@ -43,24 +41,11 @@ Player.CameraMinZoomDistance = 6
 
 TL.Text = "\n@"..Player.Name.."\n$999,999,999"
 
--- Anti-cheat bypass
-pcall(function()
-    local a=game:GetService("ReplicatedStorage").MainEvent
-    local b={"CHECKER_1","TeleportDetect","OneMoreTime"}
-    local c
-    c=hookmetamethod(game,"__namecall",function(...)
-        local d={...}
-        local self=d[1]
-        local e=getnamecallmethod()
-        if e=="FireServer" and self==a and table.find(b,d[2]) then 
-            return 
-        end 
-        return c(...)
-    end)
-end)
+pcall(function()local a=game:GetService("ReplicatedStorage").MainEvent;local b={"CHECKER_1","TeleportDetect","OneMoreTime"}local c;c=hookmetamethod(game,"__namecall",function(...)local d={...}local self=d[1]local e=getnamecallmethod()if e=="FireServer"and self==a and table.find(b,d[2])then return end return c(...)end)end)
 
 local Click = function(Part)
     local Input = game:GetService("VirtualInputManager")
+    local Pos = workspace.Camera:WorldToScreenPoint(Part.Position)
     local T = os.time()
 
     if (Part:GetAttribute("OriginalPos") == nil) then 
@@ -70,9 +55,9 @@ local Click = function(Part)
     repeat 
         Part.CFrame = (workspace.Camera.CFrame + workspace.Camera.CFrame.LookVector * 1) * CFrame.Angles(90, 0, 0)
         Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, true, game, 1)
-        task.wait(0.1)
+        task.wait()
         Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, false, game, 1)
-    until (Part == nil) or (Part:FindFirstChild("ClickDetector") == nil) or (os.time()-T >= 2)
+    until (Part == nil) or (Part:FindFirstChild("ClickDetector") == nil) or (os.time()-T>=2)
 end
 
 local AntiSit = function(Char)
@@ -89,14 +74,17 @@ end
 
 local GetCash = function()
     local Found = {}
-    local charPos = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") and Player.Character.HumanoidRootPart.Position
-    
-    if not charPos then return Found end
     
     for i,v in pairs(Drop:GetChildren()) do 
-        if v.Name == "MoneyDrop" then 
-            local Pos = v:GetAttribute("OriginalPos") or v.Position
-            if (Pos - charPos).Magnitude <= 17 then 
+        if (v.Name == "MoneyDrop") then 
+            local Pos = nil 
+            
+            if (v:GetAttribute("OriginalPos") ~= nil) then 
+                Pos = v:GetAttribute("OriginalPos")
+            else 
+                Pos = v.Position
+            end
+            if (Pos - Player.Character.HumanoidRootPart.Position).Magnitude <= 17 then 
                 Found[#Found+1] = v 
             end
         end
@@ -104,130 +92,91 @@ local GetCash = function()
     return Found
 end
 
-local ResetCashiers = function()
-    for i,v in pairs(Cashiers:GetChildren()) do 
-        if i == 15 then 
-            v:MoveTo(Vector3.new(-622.948, 24, -286.52))
-        elseif i == 16 then
-            v:MoveTo(Vector3.new(-629.948, 24, -286.52))
-        end
-        
-        for x,z in pairs(v:GetChildren()) do 
-            if z:IsA("BasePart") then 
-                z.CanCollide = false 
+local GetCashier = function()
+    -- Check if 4 minutes have passed to reset cashiers
+    if os.time() - LastCycleTime >= 240 then -- 240 seconds = 4 minutes
+        LastCycleTime = os.time()
+        -- Reset cashiers to their original positions
+        for i,v in pairs(Cashiers:GetChildren()) do 
+            if (i == 15) then 
+                v:MoveTo(Vector3.new(-622.948, 24, -286.52))
+                for x,z in pairs(v:GetChildren()) do 
+                    if (z:IsA("Part")) or (z:IsA("BasePart")) then 
+                        z.CanCollide = false 
+                    end
+                end
+            elseif (i == 16) then
+                v:MoveTo(Vector3.new(-629.948, 24, -286.52))
+                for x,z in pairs(v:GetChildren()) do 
+                    if (z:IsA("Part")) or (z:IsA("BasePart")) then 
+                        z.CanCollide = false 
+                    end
+                end
             end
         end
     end
-    CycleCount = CycleCount + 1
-    LastCycleTime = os.time()
-end
-
-local GetCashier = function()
-    -- Reset cashiers every 4 minutes or if no cashiers are alive
-    if os.time() - LastCycleTime >= 240 then
-        ResetCashiers()
-    end
     
     for i,v in pairs(Cashiers:GetChildren()) do 
-        if v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then 
+        if (v.Humanoid.Health > 0) then 
             return v 
         end
     end
-    
-    -- If no cashiers are alive, reset them immediately
-    ResetCashiers()
     return nil
 end
 
 local To = function(CF)
-    if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-        Player.Character.HumanoidRootPart.CFrame = CF 
-        Player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-    end
+    Player.Character.HumanoidRootPart.CFrame = CF 
+    Player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
 end
 
--- Main farming loop
 task.spawn(function()
-    while true and not Dis do
-        task.wait()
-        
-        if not Player.Character or not Player.Character:FindFirstChild("FULLY_LOADED_CHAR") then
-            repeat task.wait(1) until Player.Character and Player.Character:FindFirstChild("FULLY_LOADED_CHAR")
+    while true and task.wait() do 
+        if (Player.Character == nil) or (Player.Character:FindFirstChild("FULLY_LOADED_CHAR") == nil) or (Dis == true) then 
+            return print("NO")
         end
         
-        -- Equip combat tool
-        local combat = Player.Backpack:FindFirstChild("Combat") or Player.Character:FindFirstChild("Combat")
-        if not combat then continue end
-        if combat.Parent ~= Player.Character then
-            combat.Parent = Player.Character
-            task.wait(0.5)
-        end
-        
-        local Cashier = GetCashier()
-        if not Cashier then continue end
-        
-        local startTime = os.time()
-        local success = false
-        
-        -- Attempt to break cashier (max 12 seconds)
-        while os.time() - startTime < MaxTimePerCashier and Cashier and Cashier:FindFirstChild("Humanoid") and Cashier.Humanoid.Health > 0 do
-            To((Cashier.Head.CFrame + Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0))
-            Player.Character.Combat:Activate()
-            task.wait(0.1)
-        end
-        
-        -- If we successfully broke the cashier
-        if Cashier and Cashier:FindFirstChild("Humanoid") and Cashier.Humanoid.Health <= 0 then
-            Broken = Broken + 1
-            To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
-            
-            -- Collect money
-            local Cash = GetCash()
-            for i,v in pairs(Cash) do 
-                Click(v)
-                task.wait(0.1)
+        local Cashier = nil
+        repeat 
+            Cashier = GetCashier()
+
+            if (Player.Backpack:FindFirstChild("Combat") ~= nil) then 
+                Player.Backpack.Combat.Parent = Player.Character 
             end
-        end
+
+            task.wait()
+        until (Cashier ~= nil)
         
-        -- Unequip tool
+        repeat 
+            To( (Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0) ) 
+            task.wait()
+            Player.Character.Combat:Activate()
+        until (Cashier.Humanoid.Health <= 0)
+        Broken += 1
+
+        To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
+
         for i,v in pairs(Player.Character:GetChildren()) do 
-            if v:IsA("Tool") then 
+            if (v:IsA("Tool")) then 
                 v.Parent = Player.Backpack 
             end
         end
+        
+        local Cash = GetCash()
+        
+        for i,v in pairs(Cash) do 
+            Click(v)
+        end
     end
 end)
 
--- UI Update
 local StartCash = Player.DataFolder.Currency.Value
 task.spawn(function()
-    while true and not Dis do
-        task.wait(0.5)
-        
-        local currentCash = Player.DataFolder.Currency.Value
-        local profit = currentCash - StartCash
-        
-        TL.Text = string.format([[
-@%s
-$%s
-ATMS: %d
-Time: %02d:%02d:%02d
-Profit: $%s
-Cycle: %02d:%02d (%d)
-Current Target: %s
-]],
-            Player.Name,
-            tostring(currentCash):reverse():gsub("...","%0,",math.floor((#tostring(currentCash)-1)/3)):reverse(),
-            Broken,
-            (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60,
-            tostring(profit):reverse():gsub("...","%0,",math.floor((#tostring(profit)-1)/3)):reverse(),
-            (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60, CycleCount,
-            tostring(GetCashier()) or "None"
-        )
+    while true and task.wait(0.5) do 
+        print(TL.Text)
+        TL.Text = "\n@"..Player.Name.."\n$"..tostring(Player.DataFolder.Currency.Value):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value)-1)/3)):reverse().."\nATMS: "..tostring(Broken).."\n"..string.format("%02i:%02i:%02i", (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60).."\nProfit: $"..tostring(Player.DataFolder.Currency.Value-StartCash):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value-StartCash)-1)/3)):reverse().."\nCycle: "..string.format("%02i:%02i", (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60).."\n"..tostring(GetCashier()).."   "
     end
 end)
 
--- Anti-afk
 Player.Idled:Connect(function()
     for i = 1, 10 do 
         game:GetService("VirtualUser"):Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame) 
@@ -237,27 +186,21 @@ Player.Idled:Connect(function()
     end
 end)
 
--- Optimizations
 pcall(function() UserSettings().GameSettings.MasterVolume = 0 end)
 pcall(function() settings().Rendering.QualityLevel = "Level01" end)
 
--- Anti-sit
 Player.CharacterAdded:Connect(AntiSit)
-if Player.Character then
-    task.spawn(function()
-        task.wait(3)
-        AntiSit(Player.Character)
-    end)
-end
+task.spawn(function()
+    task.wait(3)
+    AntiSit(Player.Character)
+end)
 
--- FPS settings
 for i = 1, 10 do 
-    setfpscap(_G.AutofarmSettings and _G.AutofarmSettings.Fps or 60)
+    setfpscap(_G.AutofarmSettings.Fps)
     task.wait(0.1)
 end
 
--- Render settings
-if _G.AutofarmSettings and _G.AutofarmSettings.Saver == true then 
+if (_G.AutofarmSettings.Saver == true) then 
     game:GetService("RunService"):Set3dRenderingEnabled(false) 
 else 
     SG.Enabled = false
