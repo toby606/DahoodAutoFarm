@@ -57,6 +57,7 @@ local LastCycleTime = os.time()
 local CycleCount = 0
 local LastWebhookTime = os.time()
 local StartCash = Player.DataFolder.Currency.Value
+local LastCashCollectionTime = os.time()
 
 -- Functions
 _G.Disable = function()
@@ -66,24 +67,20 @@ _G.Disable = function()
     game:GetService("CoreGui").abcdefg:Destroy()
 end
 
--- Webhook logic
 local function SendWebhook()
-    -- Check if webhook is enabled and URL is set
-    if not _G.AutofarmSettings.WebhookEnabled or _G.AutofarmSettings.WebhookUrl == "" then
+    if not _G.AutofarmSettings.WebhookEnabled or _G.AutofarmSettings.WebhookUrl == "" then 
         warn("Webhook not enabled or URL not set")
-        return
+        return 
     end
-
-    -- Get the current cash and calculate profit
+    
     local currentCash = Player.DataFolder.Currency.Value
     local profit = currentCash - StartCash
     local profitPercent = (profit / math.max(StartCash, 1)) * 100
-
-    -- Prepare the webhook data (embed format)
+    
     local embed = {
         {
             ["title"] = "💰 AutoFarm Update - " .. Player.Name,
-            ["description"] = "Current farming session statistics",
+            ["description"] = string.format("Current farming session statistics"),
             ["color"] = 65280, -- Green color
             ["fields"] = {
                 {
@@ -98,12 +95,12 @@ local function SendWebhook()
                 },
                 {
                     ["name"] = "ATMs Broken",
-                    ["value"] = tostring(Broken),
+                    ["value"] = Broken,
                     ["inline"] = true
                 },
                 {
                     ["name"] = "Cycles Completed",
-                    ["value"] = tostring(CycleCount),
+                    ["value"] = CycleCount,
                     ["inline"] = true
                 },
                 {
@@ -122,27 +119,38 @@ local function SendWebhook()
             }
         }
     }
-
-    -- Prepare data for the webhook post request
+    
     local data = {
         ["embeds"] = embed,
         ["username"] = "AutoFarm Notifier",
         ["avatar_url"] = "https://cdn.discordapp.com/attachments/123456789012345678/123456789012345678/money_bag.png"
     }
-
-    -- Get the HttpService
-    local HttpService = game:GetService("HttpService")
-
-    -- Attempt to send the webhook data
+    
+    -- Using http_request from syn library for better reliability
     local success, response = pcall(function()
-        return HttpService:PostAsync(
-            _G.AutofarmSettings.WebhookUrl,
-            HttpService:JSONEncode(data),
-            Enum.HttpContentType.ApplicationJson
-        )
+        if syn and syn.request then
+            return syn.request({
+                Url = _G.AutofarmSettings.WebhookUrl,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = game:GetService("HttpService"):JSONEncode(data)
+            })
+        else
+            -- Fallback to HttpService if syn isn't available
+            local http = game:GetService("HttpService")
+            return http:RequestAsync({
+                Url = _G.AutofarmSettings.WebhookUrl,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = http:JSONEncode(data)
+            })
+        end
     end)
-
-    -- Handle response and errors
+    
     if not success then
         warn("Failed to send webhook:", response)
     else
@@ -150,99 +158,26 @@ local function SendWebhook()
     end
 end
 
--- Main farming loop (fixed continuous cycling)
-task.spawn(function()
-    while not Dis do
-        if not Player.Character or not Player.Character:FindFirstChild("FULLY_LOADED_CHAR") then
-            task.wait(1)
-            continue
-        end
-        
-        -- Process a cashier
-        local cashier = GetCashier()
-        if cashier then
-            Broken += 1
-            ProcessCashier(cashier)
-        else
-            task.wait(1)
-        end
-        
-        -- Check if it's time to send a webhook based on the interval
-        if _G.AutofarmSettings.WebhookEnabled and os.time() - LastWebhookTime >= _G.AutofarmSettings.WebhookInterval then
-            LastWebhookTime = os.time()
-            SendWebhook()  -- Call the webhook send function
-        end
-    end
-end)
+Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
+Player.CameraMaxZoomDistance = 6
+Player.CameraMinZoomDistance = 6
 
+TL.Text = "\n@"..Player.Name.."\n$999,999,999"
 
--- Improved cashier processing function
-local function ProcessCashier(cashier)
-    if not cashier or not cashier:FindFirstChild("Humanoid") then return end
-    
-    -- Move to cashier
-    To((cashier.Head.CFrame + Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0))
-    
-    -- Equip combat tool
-    local combat = Player.Backpack:FindFirstChild("Combat")
-    if combat and not Player.Character:FindFirstChild("Combat") then
-        combat.Parent = Player.Character
-        task.wait(0.5)
-    end
-    
-    -- Attack cashier
-    while cashier and cashier:FindFirstChild("Humanoid") and cashier.Humanoid.Health > 0 and not Dis do
-        if Player.Character:FindFirstChild("Combat") then
-            Player.Character.Combat:Activate()
-        end
-        task.wait()
-    end
-    
-    if Dis then return end
-    
-    -- After defeating cashier
-    if cashier and cashier:FindFirstChild("Head") then
-        To(cashier.Head.CFrame + cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
-    end
-    
-    -- Collect money
-    local cash = GetCash()
-    for _, moneyDrop in pairs(cash) do
-        if moneyDrop and moneyDrop.Parent then
-            Click(moneyDrop)
-        end
-    end
-    
-    -- Unequip tools
-    for _, tool in pairs(Player.Character:GetChildren()) do
-        if tool:IsA("Tool") then
-            tool.Parent = Player.Backpack
-        end
-    end
-end
-
--- Main farming loop (fixed continuous cycling)
-task.spawn(function()
-    while not Dis do
-        if not Player.Character or not Player.Character:FindFirstChild("FULLY_LOADED_CHAR") then
-            task.wait(1)
-            continue
-        end
-        
-        local cashier = GetCashier()
-        if cashier then
-            Broken += 1
-            ProcessCashier(cashier)
-        else
-            task.wait(1)
-        end
-        
-        -- Check webhook interval
-        if _G.AutofarmSettings.WebhookEnabled and os.time() - LastWebhookTime >= _G.AutofarmSettings.WebhookInterval then
-            LastWebhookTime = os.time()
-            SendWebhook()
-        end
-    end
+-- Anti-cheat bypass
+pcall(function()
+    local a=game:GetService("ReplicatedStorage").MainEvent
+    local b={"CHECKER_1","TeleportDetect","OneMoreTime"}
+    local c
+    c=hookmetamethod(game,"__namecall",function(...)
+        local d={...}
+        local self=d[1]
+        local e=getnamecallmethod()
+        if e=="FireServer" and self==a and table.find(b,d[2]) then 
+            return 
+        end 
+        return c(...)
+    end)
 end)
 
 local Click = function(Part)
@@ -338,6 +273,92 @@ local To = function(CF)
     Player.Character.HumanoidRootPart.CFrame = CF 
     Player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
 end
+
+-- Improved cash collection with timeout
+local function CollectCashWithTimeout(timeout)
+    local startTime = os.time()
+    local cashCollected = false
+    local cash = GetCash()
+    
+    while os.time() - startTime < timeout and not Dis do
+        if #cash > 0 then
+            for i,v in pairs(cash) do 
+                Click(v)
+                LastCashCollectionTime = os.time()
+                cashCollected = true
+            end
+            cash = GetCash() -- Refresh cash list
+        else
+            break
+        end
+        task.wait()
+    end
+    
+    return cashCollected
+end
+
+-- Main farming loop with improved cycling
+task.spawn(function()
+    while not Dis do
+        if not Player.Character or not Player.Character:FindFirstChild("FULLY_LOADED_CHAR") then
+            task.wait(1)
+            continue
+        end
+        
+        local cashier = GetCashier()
+        if not cashier then
+            task.wait(1)
+            continue
+        end
+        
+        -- Equip combat tool
+        local combat = Player.Backpack:FindFirstChild("Combat")
+        if combat and not Player.Character:FindFirstChild("Combat") then
+            combat.Parent = Player.Character
+            task.wait(0.5)
+        end
+        
+        -- Move to cashier and attack
+        To((cashier.Head.CFrame + Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0))
+        
+        local attackStart = os.time()
+        while cashier and cashier:FindFirstChild("Humanoid") and cashier.Humanoid.Health > 0 and not Dis do
+            if Player.Character:FindFirstChild("Combat") then
+                Player.Character.Combat:Activate()
+            end
+            
+            -- Check if we've been attacking too long without success
+            if os.time() - attackStart > 60 then
+                warn("Attack timeout - moving to next cashier")
+                break
+            end
+            
+            task.wait()
+        end
+        
+        if Dis then break end
+        
+        -- After defeating cashier
+        if cashier and cashier:FindFirstChild("Head") then
+            To(cashier.Head.CFrame + cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
+            Broken += 1
+            
+            -- Collect money with 60 second timeout
+            if not CollectCashWithTimeout(60) then
+                warn("Cash collection timeout - moving to next cashier")
+            end
+        end
+        
+        -- Unequip tools
+        for _, tool in pairs(Player.Character:GetChildren()) do
+            if tool:IsA("Tool") then
+                tool.Parent = Player.Backpack
+            end
+        end
+        
+        task.wait(1)
+    end
+end)
 
 -- UI Update loop
 task.spawn(function()
