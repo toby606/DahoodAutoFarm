@@ -27,6 +27,7 @@ local Dis = false
 local Broken = 0 
 local StartTick = os.time()
 local LastCycleTime = os.time()
+local CycleCount = 0
 
 _G.Disable = function()
     Dis = true
@@ -41,7 +42,20 @@ Player.CameraMinZoomDistance = 6
 
 TL.Text = "\n@"..Player.Name.."\n$999,999,999"
 
-pcall(function()local a=game:GetService("ReplicatedStorage").MainEvent;local b={"CHECKER_1","TeleportDetect","OneMoreTime"}local c;c=hookmetamethod(game,"__namecall",function(...)local d={...}local self=d[1]local e=getnamecallmethod()if e=="FireServer"and self==a and table.find(b,d[2])then return end return c(...)end)end)
+pcall(function()
+    local a=game:GetService("ReplicatedStorage").MainEvent
+    local b={"CHECKER_1","TeleportDetect","OneMoreTime"}
+    local c
+    c=hookmetamethod(game,"__namecall",function(...)
+        local d={...}
+        local self=d[1]
+        local e=getnamecallmethod()
+        if e=="FireServer" and self==a and table.find(b,d[2]) then 
+            return 
+        end 
+        return c(...)
+    end)
+end)
 
 local Click = function(Part)
     local Input = game:GetService("VirtualInputManager")
@@ -92,28 +106,32 @@ local GetCash = function()
     return Found
 end
 
-local GetCashier = function()
-    -- Check if 4 minutes have passed to reset cashiers
-    if os.time() - LastCycleTime >= 240 then -- 240 seconds = 4 minutes
-        LastCycleTime = os.time()
-        -- Reset cashiers to their original positions
-        for i,v in pairs(Cashiers:GetChildren()) do 
-            if (i == 15) then 
-                v:MoveTo(Vector3.new(-622.948, 24, -286.52))
-                for x,z in pairs(v:GetChildren()) do 
-                    if (z:IsA("Part")) or (z:IsA("BasePart")) then 
-                        z.CanCollide = false 
-                    end
+local ResetCashiers = function()
+    for i,v in pairs(Cashiers:GetChildren()) do 
+        if (i == 15) then 
+            v:MoveTo(Vector3.new(-622.948, 24, -286.52))
+            for x,z in pairs(v:GetChildren()) do 
+                if (z:IsA("Part")) or (z:IsA("BasePart")) then 
+                    z.CanCollide = false 
                 end
-            elseif (i == 16) then
-                v:MoveTo(Vector3.new(-629.948, 24, -286.52))
-                for x,z in pairs(v:GetChildren()) do 
-                    if (z:IsA("Part")) or (z:IsA("BasePart")) then 
-                        z.CanCollide = false 
-                    end
+            end
+        elseif (i == 16) then
+            v:MoveTo(Vector3.new(-629.948, 24, -286.52))
+            for x,z in pairs(v:GetChildren()) do 
+                if (z:IsA("Part")) or (z:IsA("BasePart")) then 
+                    z.CanCollide = false 
                 end
             end
         end
+    end
+    CycleCount = CycleCount + 1
+    LastCycleTime = os.time()
+end
+
+local GetCashier = function()
+    -- Reset cashiers every 4 minutes or if no cashiers are alive
+    if os.time() - LastCycleTime >= 240 then
+        ResetCashiers()
     end
     
     for i,v in pairs(Cashiers:GetChildren()) do 
@@ -121,6 +139,9 @@ local GetCashier = function()
             return v 
         end
     end
+    
+    -- If no cashiers are alive, reset them immediately
+    ResetCashiers()
     return nil
 end
 
@@ -143,28 +164,30 @@ task.spawn(function()
                 Player.Backpack.Combat.Parent = Player.Character 
             end
 
-            task.wait()
+            task.wait(1) -- Added delay to prevent spamming
         until (Cashier ~= nil)
         
         repeat 
             To( (Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0) ) 
-            task.wait()
+            task.wait(0.1)
             Player.Character.Combat:Activate()
-        until (Cashier.Humanoid.Health <= 0)
-        Broken += 1
+        until (Cashier.Humanoid.Health <= 0) or (Cashier == nil)
+        
+        if Cashier then
+            Broken = Broken + 1
+            To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
 
-        To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
-
-        for i,v in pairs(Player.Character:GetChildren()) do 
-            if (v:IsA("Tool")) then 
-                v.Parent = Player.Backpack 
+            for i,v in pairs(Player.Character:GetChildren()) do 
+                if (v:IsA("Tool")) then 
+                    v.Parent = Player.Backpack 
+                end
             end
-        end
-        
-        local Cash = GetCash()
-        
-        for i,v in pairs(Cash) do 
-            Click(v)
+            
+            local Cash = GetCash()
+            
+            for i,v in pairs(Cash) do 
+                Click(v)
+            end
         end
     end
 end)
@@ -172,8 +195,7 @@ end)
 local StartCash = Player.DataFolder.Currency.Value
 task.spawn(function()
     while true and task.wait(0.5) do 
-        print(TL.Text)
-        TL.Text = "\n@"..Player.Name.."\n$"..tostring(Player.DataFolder.Currency.Value):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value)-1)/3)):reverse().."\nATMS: "..tostring(Broken).."\n"..string.format("%02i:%02i:%02i", (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60).."\nProfit: $"..tostring(Player.DataFolder.Currency.Value-StartCash):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value-StartCash)-1)/3)):reverse().."\nCycle: "..string.format("%02i:%02i", (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60).."\n"..tostring(GetCashier()).."   "
+        TL.Text = "\n@"..Player.Name.."\n$"..tostring(Player.DataFolder.Currency.Value):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value)-1)/3)):reverse().."\nATMS: "..tostring(Broken).."\n"..string.format("%02i:%02i:%02i", (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60).."\nProfit: $"..tostring(Player.DataFolder.Currency.Value-StartCash):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value-StartCash)-1)/3)):reverse().."\nCycle: "..string.format("%02i:%02i", (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60).." ("..CycleCount..")\n"..tostring(GetCashier()).."   "
     end
 end)
 
