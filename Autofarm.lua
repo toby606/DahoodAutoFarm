@@ -31,6 +31,9 @@ local CycleCount = 0
 local MAX_TIME_PER_CASHIER = 12 -- Seconds per cashier attempt
 local VAULT_POSITION = CFrame.new(-726.49, -22.47, -243.32) -- Default vault position
 local cashierBlacklist = {}
+local StartCash = Player.DataFolder.Currency.Value
+local LastCashUpdate = os.time()
+local LastProfit = 0
 
 _G.Disable = function()
     Dis = true
@@ -232,43 +235,55 @@ task.spawn(function()
 end)
 
 -- UI Update loop
-local StartCash = Player.DataFolder.Currency.Value
-local function formatNumber(n)
-    return tostring(n):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")
-end
-
 task.spawn(function()
     while true and task.wait(0.5) do 
-        local currentCash = Player.DataFolder.Currency.Value
+        if Dis then break end
+        
+        -- Force update the cash value
+        local currentCash
+        pcall(function()
+            currentCash = Player.DataFolder.Currency.Value
+            -- Update start cash if it's higher than current (in case of death)
+            if StartCash > currentCash then
+                StartCash = currentCash
+            end
+        end)
+        
+        if not currentCash then
+            TL.Text = "Error reading cash value"
+            task.wait(2)
+            continue
+        end
+
         local profit = currentCash - StartCash
         local elapsedTime = os.time() - StartTick
         
-        -- Calculate hours, minutes, seconds
-        local hours = math.floor(elapsedTime / 3600)
-        local minutes = math.floor((elapsedTime % 3600) / 60)
-        local seconds = elapsedTime % 60
-        
-        -- Calculate cycle time
-        local cycleTime = os.time() - LastCycleTime
-        local cycleMinutes = math.floor(cycleTime / 60)
-        local cycleSeconds = cycleTime % 60
-        
+        -- Format numbers properly
+        local function formatCurrency(amount)
+            return string.format("%d", amount):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+        end
+
+        -- Update display
         TL.Text = string.format([[
 @%s
-$%s
+Cash: $%s
 ATMs: %d
 Time: %02d:%02d:%02d
-Profit: $%s
+Profit: $%s (+$%s/min)
 Cycle: %02d:%02d (%d)
 Status: %s]],
             Player.Name,
-            formatNumber(currentCash),
+            formatCurrency(currentCash),
             Broken,
-            hours, minutes, seconds,
-            formatNumber(profit),
-            cycleMinutes, cycleSeconds, CycleCount,
+            math.floor(elapsedTime/3600), math.floor(elapsedTime/60%60), elapsedTime%60,
+            formatCurrency(profit),
+            formatCurrency(math.floor((profit-LastProfit)/((os.time()-LastCashUpdate)/60))),
+            math.floor((os.time()-LastCycleTime)/60), (os.time()-LastCycleTime)%60, CycleCount,
             next(cashierBlacklist) and "Farming" or "Resetting"
         )
+        
+        LastProfit = profit
+        LastCashUpdate = os.time()
     end
 end)
 
