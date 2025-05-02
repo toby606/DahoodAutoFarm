@@ -233,45 +233,44 @@ end)
 
 -- UI Update loop
 local StartCash = Player.DataFolder.Currency.Value
+local function formatNumber(n)
+    return tostring(n):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")
+end
+
 task.spawn(function()
     while true and task.wait(0.5) do 
-        TL.Text = "\n@"..Player.Name.."\n$"..tostring(Player.DataFolder.Currency.Value):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value)-1)/3)):reverse()..
-            "\nATMS: "..tostring(Broken)..
-            "\n"..string.format("%02i:%02i:%02i", (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60)..
-            "\nProfit: $"..tostring(Player.DataFolder.Currency.Value-StartCash):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value-StartCash)-1)/3)):reverse()..
-            "\nCycle: "..string.format("%02i:%02i", (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60).." ("..CycleCount..")"..
-            "\nStatus: "..(next(cashierBlacklist) and "Farming" or "Resetting")
+        local currentCash = Player.DataFolder.Currency.Value
+        local profit = currentCash - StartCash
+        local elapsedTime = os.time() - StartTick
+        
+        -- Calculate hours, minutes, seconds
+        local hours = math.floor(elapsedTime / 3600)
+        local minutes = math.floor((elapsedTime % 3600) / 60)
+        local seconds = elapsedTime % 60
+        
+        -- Calculate cycle time
+        local cycleTime = os.time() - LastCycleTime
+        local cycleMinutes = math.floor(cycleTime / 60)
+        local cycleSeconds = cycleTime % 60
+        
+        TL.Text = string.format([[
+@%s
+$%s
+ATMs: %d
+Time: %02d:%02d:%02d
+Profit: $%s
+Cycle: %02d:%02d (%d)
+Status: %s]],
+            Player.Name,
+            formatNumber(currentCash),
+            Broken,
+            hours, minutes, seconds,
+            formatNumber(profit),
+            cycleMinutes, cycleSeconds, CycleCount,
+            next(cashierBlacklist) and "Farming" or "Resetting"
+        )
     end
 end)
-
-Player.Idled:Connect(function()
-    for i = 1, 10 do 
-        game:GetService("VirtualUser"):Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame) 
-        task.wait(0.2) 
-        game:GetService("VirtualUser"):Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-        task.wait(0.2)
-    end
-end)
-
-pcall(function() UserSettings().GameSettings.MasterVolume = 0 end)
-pcall(function() settings().Rendering.QualityLevel = "Level01" end)
-
-Player.CharacterAdded:Connect(AntiSit)
-task.spawn(function()
-    task.wait(3)
-    AntiSit(Player.Character)
-end)
-
-for i = 1, 10 do 
-    setfpscap(_G.AutofarmSettings.Fps)
-    task.wait(0.1)
-end
-
-if (_G.AutofarmSettings.Saver == true) then 
-    game:GetService("RunService"):Set3dRenderingEnabled(false) 
-else 
-    SG.Enabled = false
-end
 
 -- Manual reset keybind
 game:GetService("UserInputService").InputBegan:Connect(function(input)
