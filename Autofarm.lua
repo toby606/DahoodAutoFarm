@@ -216,7 +216,99 @@ task.spawn(function()
     end
 end)
 
--- [Rest of your existing functions (Click, AntiSit, GetCash, GetCashier, To) remain unchanged...]
+local Click = function(Part)
+    local Input = game:GetService("VirtualInputManager")
+    local T = os.time()
+
+    if (Part:GetAttribute("OriginalPos") == nil) then 
+        Part:SetAttribute("OriginalPos", Part.Position)
+    end
+
+    repeat 
+        Part.CFrame = (workspace.Camera.CFrame + workspace.Camera.CFrame.LookVector * 1) * CFrame.Angles(90, 0, 0)
+        Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, true, game, 1)
+        task.wait()
+        Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, false, game, 1)
+    until (Part == nil) or (Part:FindFirstChild("ClickDetector") == nil) or (os.time()-T>=2)
+end
+
+local AntiSit = function(Char)
+    task.wait(1)    
+    local Hum = Char:WaitForChild("Humanoid")
+    Hum.Seated:Connect(function()
+        warn("SITTING")
+        Hum.Sit = false
+        Hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
+        task.wait(0.3)
+        Hum.Jump = true
+    end)
+end
+
+local GetCash = function()
+    local Found = {}
+    
+    for i,v in pairs(Drop:GetChildren()) do 
+        if (v.Name == "MoneyDrop") then 
+            local Pos = nil 
+            
+            if (v:GetAttribute("OriginalPos") ~= nil) then 
+                Pos = v:GetAttribute("OriginalPos")
+            else 
+                Pos = v.Position
+            end
+            if (Pos - Player.Character.HumanoidRootPart.Position).Magnitude <= 17 then 
+                Found[#Found+1] = v 
+            end
+        end
+    end
+    return Found
+end
+
+local GetCashier = function()
+    -- Check if 4 minutes have passed to reset cashiers
+    if os.time() - LastCycleTime >= 240 then -- 240 seconds = 4 minutes
+        LastCycleTime = os.time()
+        CycleCount = CycleCount + 1
+        
+        -- Reset cashiers to their original positions
+        for i,v in pairs(Cashiers:GetChildren()) do 
+            if (i == 15) then 
+                v:MoveTo(Vector3.new(-622.948, 24, -286.52))
+                for x,z in pairs(v:GetChildren()) do 
+                    if (z:IsA("Part")) or (z:IsA("BasePart")) then 
+                        z.CanCollide = false 
+                    end
+                end
+            elseif (i == 16) then
+                v:MoveTo(Vector3.new(-629.948, 24, -286.52))
+                for x,z in pairs(v:GetChildren()) do 
+                    if (z:IsA("Part")) or (z:IsA("BasePart")) then 
+                        z.CanCollide = false 
+                    end
+                end
+            end
+        end
+        
+        -- Send webhook notification if enabled and interval has passed
+        if _G.AutofarmSettings.WebhookEnabled and os.time() - LastWebhookTime >= _G.AutofarmSettings.WebhookInterval then
+            print("Attempting to send webhook...")
+            LastWebhookTime = os.time()
+            SendWebhook()
+        end
+    end
+    
+    for i,v in pairs(Cashiers:GetChildren()) do 
+        if (v.Humanoid.Health > 0) then 
+            return v 
+        end
+    end
+    return nil
+end
+
+local To = function(CF)
+    Player.Character.HumanoidRootPart.CFrame = CF 
+    Player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+end
 
 -- UI Update loop
 task.spawn(function()
