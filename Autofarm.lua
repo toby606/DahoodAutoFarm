@@ -1,33 +1,46 @@
-if (not game:IsLoaded()) then 
-    game.Loaded:Wait()
-    task.wait(1)
+_G.AutofarmSettings = { 
+    Fps = 30,                          -- Frames per second cap
+    Saver = false,                      -- Whether to save or not
+    webhookUrl = "",                    -- Webhook URL for logging
+    Time = 5                            -- Time interval in minutes for each webhook to send
+}
+
+-- Load and execute the autofarm script
+loadstring(game:HttpGet("https://raw.githubusercontent.com/toby606/DahoodAutoFarm/refs/heads/main/Autofarm.lua"))()
+
+-- Optimizations: FPS, rendering, volume, and quality
+for i = 1, 10 do 
+    setfpscap(tonumber(_G.AutofarmSettings.Fps))
+    task.wait(0.1)
 end
 
-repeat task.wait(0.1) until (game:GetService("Players").LocalPlayer) and (game:GetService("Players").LocalPlayer.Character)
+game:GetService("RunService"):Set3dRenderingEnabled(false)
+pcall(function() UserSettings().GameSettings.MasterVolume = 0 end)
+pcall(function() settings().Rendering.QualityLevel = "Level01" end)
 
-local SG = Instance.new("ScreenGui")
-SG.Parent = game:GetService("CoreGui")
-SG.Name = "abcdefg"
-SG.IgnoreGuiInset = true 
-local TL = Instance.new("TextLabel")
-TL.Parent = SG 
-TL.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-TL.Active = false
-TL.Font = Enum.Font.MontserratMedium
-TL.TextColor3 = Color3.fromRGB(200, 200, 200)
-TL.TextSize = 24
-TL.AnchorPoint = Vector2.new(0.5, 0.5)
-TL.Position = UDim2.new(0.5, 0, 0.5, 0)
-TL.Size = UDim2.new(1, 0, 1, 0)
+-- Webhook logging
+local SendLog = loadstring(game:HttpGet("https://github.com/applless/RandomScripts/raw/main/Webhookk"))()
 
-local Player = game:GetService("Players").LocalPlayer
-local Cashiers = workspace.Cashiers 
-local Drop = workspace.Ignored.Drop
-local Dis = false
-local Broken = 0 
-local StartTick = os.time()
-local LastCycleTime = os.time()
+task.spawn(function()
+    while true and task.wait(_G.AutofarmSettings.Time * 60) do
+        local s, e = pcall(function()
+            SendLog(_G.AutofarmSettings.webhookUrl, {
+                Player.Name, 
+                Player.UserId, 
+                WALLET.Text, 
+                PROFIT.Text, 
+                TIMER.Text, 
+                BROKEN.Text, 
+                "| iku autofarm by @trans"
+            })
+        end)
+        if (e) then 
+            Log("Error while sending log:\n"..tostring(e).."\n")
+        end
+    end
+end)
 
+-- Function to stop autofarming
 _G.Disable = function()
     Dis = true
     game:GetService("RunService"):Set3dRenderingEnabled(true)
@@ -35,100 +48,54 @@ _G.Disable = function()
     game:GetService("CoreGui").abcdefg:Destroy()
 end
 
-Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
-Player.CameraMaxZoomDistance = 6
-Player.CameraMinZoomDistance = 6
-
-TL.Text = "\n@"..Player.Name.."\n$999,999,999"
-
-pcall(function()local a=game:GetService("ReplicatedStorage").MainEvent;local b={"CHECKER_1","TeleportDetect","OneMoreTime"}local c;c=hookmetamethod(game,"__namecall",function(...)local d={...}local self=d[1]local e=getnamecallmethod()if e=="FireServer"and self==a and table.find(b,d[2])then return end return c(...)end)end)
-
-local Click = function(Part)
-    local Input = game:GetService("VirtualInputManager")
-    local Pos = workspace.Camera:WorldToScreenPoint(Part.Position)
-    local T = os.time()
-
-    if (Part:GetAttribute("OriginalPos") == nil) then 
-        Part:SetAttribute("OriginalPos", Part.Position)
-    end
-
-    repeat 
-        Part.CFrame = (workspace.Camera.CFrame + workspace.Camera.CFrame.LookVector * 1) * CFrame.Angles(90, 0, 0)
-        Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, true, game, 1)
-        task.wait()
-        Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, false, game, 1)
-    until (Part == nil) or (Part:FindFirstChild("ClickDetector") == nil) or (os.time()-T>=2)
-end
-
-local AntiSit = function(Char)
-    task.wait(1)    
-    local Hum = Char:WaitForChild("Humanoid")
-    Hum.Seated:Connect(function()
-        warn("SITTING")
-        Hum.Sit = false
-        Hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-        task.wait(0.3)
-        Hum.Jump = true
-    end)
-end
-
-local GetCash = function()
-    local Found = {}
-    
-    for i,v in pairs(Drop:GetChildren()) do 
-        if (v.Name == "MoneyDrop") then 
-            local Pos = nil 
-            
-            if (v:GetAttribute("OriginalPos") ~= nil) then 
-                Pos = v:GetAttribute("OriginalPos")
-            else 
-                Pos = v.Position
-            end
-            if (Pos - Player.Character.HumanoidRootPart.Position).Magnitude <= 17 then 
-                Found[#Found+1] = v 
-            end
-        end
-    end
-    return Found
-end
-
-local GetCashier = function()
-    -- Check if 4 minutes have passed to reset cashiers
-    if os.time() - LastCycleTime >= 240 then -- 240 seconds = 4 minutes
-        LastCycleTime = os.time()
-        -- Reset cashiers to their original positions
-        for i,v in pairs(Cashiers:GetChildren()) do 
-            if (i == 15) then 
-                v:MoveTo(Vector3.new(-622.948, 24, -286.52))
-                for x,z in pairs(v:GetChildren()) do 
-                    if (z:IsA("Part")) or (z:IsA("BasePart")) then 
-                        z.CanCollide = false 
-                    end
-                end
-            elseif (i == 16) then
-                v:MoveTo(Vector3.new(-629.948, 24, -286.52))
-                for x,z in pairs(v:GetChildren()) do 
-                    if (z:IsA("Part")) or (z:IsA("BasePart")) then 
-                        z.CanCollide = false 
-                    end
-                end
-            end
-        end
+-- Knife buying and usage (from previous code)
+local Attack = function()
+    local Mode = tonumber(_G.AutofarmSettings.AttackMode)
+    if (Mode == nil) then
+        return Log("INVALID ATTACK METHOD!!!")
     end
     
-    for i,v in pairs(Cashiers:GetChildren()) do 
-        if (v.Humanoid.Health > 0) then 
-            return v 
+    -- Knife attack mode (Mode 3)
+    if (Mode == 3) then
+        if (Player.DataFolder.Currency.Value < 200) then 
+            task.spawn(function()
+                EMPTY.Text = "| Not enough dhc."
+                task.wait(10)
+                EMPTY.Text = "|"
+            end)
+            return Log("nigga how are you that broke that you cant afford to buy a knife lol.")
         end
+        
+        -- Buy knife if needed
+        if (Player.Backpack:FindFirstChild("[Knife]") == nil) and (Player.Character:FindFirstChild("[Knife]") == nil) then 
+            Log("buying knife.")
+            EMPTY.Text = "| Buying knife."
+            repeat 
+                local KnifeBuy = workspace.Ignored.Shop["[Knife] - $159"]
+                Player.Character.HumanoidRootPart.CFrame = KnifeBuy.Head.CFrame + Vector3.new(0, 3.2, 0)
+                task.wait(0.2)
+                fireclickdetector(KnifeBuy.ClickDetector)
+            until (Player.Backpack:FindFirstChild("[Knife]")) or (Player.Character:FindFirstChild("[Knife]")) or (Shutdown == true)
+            EMPTY.Text = "|"
+        end
+        
+        -- Equip knife
+        if (Player.Backpack:FindFirstChild("[Knife]")) then 
+            task.wait(0.66)
+            pcall(function()
+                Player.Backpack["[Knife]"].Parent = Player.Character
+            end)
+        end
+        
+        -- Use knife
+        local Knife = Player.Character:FindFirstChild("[Knife]")
+        if (Knife == nil) then return Log("no knife tool found.") end
+        Knife:Activate()
+        task.wait(0.1)
     end
-    return nil
 end
 
-local To = function(CF)
-    Player.Character.HumanoidRootPart.CFrame = CF 
-    Player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-end
-
+-- Main loop for attacking and collecting cash
 task.spawn(function()
     while true and task.wait() do 
         if (Player.Character == nil) or (Player.Character:FindFirstChild("FULLY_LOADED_CHAR") == nil) or (Dis == true) then 
@@ -145,6 +112,9 @@ task.spawn(function()
 
             task.wait()
         until (Cashier ~= nil)
+        
+        -- Perform knife attack on cashiers
+        Attack()
         
         repeat 
             To( (Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0) ) 
@@ -169,6 +139,7 @@ task.spawn(function()
     end
 end)
 
+-- Update UI with relevant stats
 local StartCash = Player.DataFolder.Currency.Value
 task.spawn(function()
     while true and task.wait(0.5) do 
@@ -177,6 +148,7 @@ task.spawn(function()
     end
 end)
 
+-- Idle prevention
 Player.Idled:Connect(function()
     for i = 1, 10 do 
         game:GetService("VirtualUser"):Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame) 
@@ -186,6 +158,7 @@ Player.Idled:Connect(function()
     end
 end)
 
+-- Master volume and rendering settings
 pcall(function() UserSettings().GameSettings.MasterVolume = 0 end)
 pcall(function() settings().Rendering.QualityLevel = "Level01" end)
 
@@ -194,11 +167,6 @@ task.spawn(function()
     task.wait(3)
     AntiSit(Player.Character)
 end)
-
-for i = 1, 10 do 
-    setfpscap(_G.AutofarmSettings.Fps)
-    task.wait(0.1)
-end
 
 if (_G.AutofarmSettings.Saver == true) then 
     game:GetService("RunService"):Set3dRenderingEnabled(false) 
