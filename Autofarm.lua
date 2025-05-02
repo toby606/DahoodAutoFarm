@@ -2,6 +2,7 @@ if (not game:IsLoaded()) then
     game.Loaded:Wait()
     task.wait(1)
 end
+
 -- Default settings
 local Settings = {
     Fps = 30,
@@ -26,11 +27,6 @@ if _G.AutofarmSettings then
 end
 
 _G.AutofarmSettings = Settings -- Make merged settings available globally
-
-if not game:IsLoaded() then 
-    game.Loaded:Wait()
-    task.wait(1)
-end
 
 repeat task.wait(0.1) until (game:GetService("Players").LocalPlayer) and (game:GetService("Players").LocalPlayer.Character)
 
@@ -133,12 +129,17 @@ local function SendWebhook()
         ["Content-Type"] = "application/json"
     }
     
+    -- Using HttpService:PostAsync instead of game:HttpGet for better webhook support
     local success, response = pcall(function()
-        return game:HttpGet(_G.AutofarmSettings.WebhookUrl, true, {
-            Method = "POST",
-            Headers = headers,
-            Body = game:GetService("HttpService"):JSONEncode(data)
-        })
+        local HttpService = game:GetService("HttpService")
+        local response = HttpService:PostAsync(
+            _G.AutofarmSettings.WebhookUrl,
+            HttpService:JSONEncode(data),
+            Enum.HttpContentType.ApplicationJson,
+            false,
+            headers
+        )
+        return response
     end)
     
     if not success then
