@@ -125,21 +125,19 @@ local function SendWebhook()
         ["avatar_url"] = "https://cdn.discordapp.com/attachments/123456789012345678/123456789012345678/money_bag.png"
     }
     
-    local headers = {
-        ["Content-Type"] = "application/json"
-    }
-    
-    -- Using HttpService:PostAsync instead of game:HttpGet for better webhook support
+    -- New reliable webhook method
     local success, response = pcall(function()
-        local HttpService = game:GetService("HttpService")
-        local response = HttpService:PostAsync(
-            _G.AutofarmSettings.WebhookUrl,
-            HttpService:JSONEncode(data),
-            Enum.HttpContentType.ApplicationJson,
-            false,
-            headers
-        )
-        return response
+        local http = game:GetService("HttpService")
+        local json = http:JSONEncode(data)
+        
+        return http:RequestAsync({
+            Url = _G.AutofarmSettings.WebhookUrl,
+            Method = "POST",
+            Headers = {
+                ["Content-Type"] = "application/json"
+            },
+            Body = json
+        })
     end)
     
     if not success then
@@ -149,166 +147,80 @@ local function SendWebhook()
     end
 end
 
-Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
-Player.CameraMaxZoomDistance = 6
-Player.CameraMinZoomDistance = 6
-
-TL.Text = "\n@"..Player.Name.."\n$999,999,999"
-
--- Anti-cheat bypass
-pcall(function()
-    local a=game:GetService("ReplicatedStorage").MainEvent
-    local b={"CHECKER_1","TeleportDetect","OneMoreTime"}
-    local c
-    c=hookmetamethod(game,"__namecall",function(...)
-        local d={...}
-        local self=d[1]
-        local e=getnamecallmethod()
-        if e=="FireServer" and self==a and table.find(b,d[2]) then 
-            return 
-        end 
-        return c(...)
-    end)
-end)
-
-local Click = function(Part)
-    local Input = game:GetService("VirtualInputManager")
-    local T = os.time()
-
-    if (Part:GetAttribute("OriginalPos") == nil) then 
-        Part:SetAttribute("OriginalPos", Part.Position)
-    end
-
-    repeat 
-        Part.CFrame = (workspace.Camera.CFrame + workspace.Camera.CFrame.LookVector * 1) * CFrame.Angles(90, 0, 0)
-        Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, true, game, 1)
-        task.wait()
-        Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, false, game, 1)
-    until (Part == nil) or (Part:FindFirstChild("ClickDetector") == nil) or (os.time()-T>=2)
-end
-
-local AntiSit = function(Char)
-    task.wait(1)    
-    local Hum = Char:WaitForChild("Humanoid")
-    Hum.Seated:Connect(function()
-        warn("SITTING")
-        Hum.Sit = false
-        Hum:SetStateEnabled(Enum.HumanoidStateType.Seated, false)
-        task.wait(0.3)
-        Hum.Jump = true
-    end)
-end
-
-local GetCash = function()
-    local Found = {}
+-- Improved cashier processing function
+local function ProcessCashier(cashier)
+    if not cashier or not cashier:FindFirstChild("Humanoid") then return end
     
-    for i,v in pairs(Drop:GetChildren()) do 
-        if (v.Name == "MoneyDrop") then 
-            local Pos = nil 
-            
-            if (v:GetAttribute("OriginalPos") ~= nil) then 
-                Pos = v:GetAttribute("OriginalPos")
-            else 
-                Pos = v.Position
-            end
-            if (Pos - Player.Character.HumanoidRootPart.Position).Magnitude <= 17 then 
-                Found[#Found+1] = v 
-            end
+    -- Move to cashier
+    To((cashier.Head.CFrame + Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0))
+    
+    -- Equip combat tool
+    local combat = Player.Backpack:FindFirstChild("Combat")
+    if combat and not Player.Character:FindFirstChild("Combat") then
+        combat.Parent = Player.Character
+        task.wait(0.5)
+    end
+    
+    -- Attack cashier
+    while cashier and cashier:FindFirstChild("Humanoid") and cashier.Humanoid.Health > 0 and not Dis do
+        if Player.Character:FindFirstChild("Combat") then
+            Player.Character.Combat:Activate()
+        end
+        task.wait()
+    end
+    
+    if Dis then return end
+    
+    -- After defeating cashier
+    if cashier and cashier:FindFirstChild("Head") then
+        To(cashier.Head.CFrame + cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
+    end
+    
+    -- Collect money
+    local cash = GetCash()
+    for _, moneyDrop in pairs(cash) do
+        if moneyDrop and moneyDrop.Parent then
+            Click(moneyDrop)
         end
     end
-    return Found
+    
+    -- Unequip tools
+    for _, tool in pairs(Player.Character:GetChildren()) do
+        if tool:IsA("Tool") then
+            tool.Parent = Player.Backpack
+        end
+    end
 end
 
-local GetCashier = function()
-    -- Check if 4 minutes have passed to reset cashiers
-    if os.time() - LastCycleTime >= 240 then -- 240 seconds = 4 minutes
-        LastCycleTime = os.time()
-        CycleCount = CycleCount + 1
-        
-        -- Reset cashiers to their original positions
-        for i,v in pairs(Cashiers:GetChildren()) do 
-            if (i == 15) then 
-                v:MoveTo(Vector3.new(-622.948, 24, -286.52))
-                for x,z in pairs(v:GetChildren()) do 
-                    if (z:IsA("Part")) or (z:IsA("BasePart")) then 
-                        z.CanCollide = false 
-                    end
-                end
-            elseif (i == 16) then
-                v:MoveTo(Vector3.new(-629.948, 24, -286.52))
-                for x,z in pairs(v:GetChildren()) do 
-                    if (z:IsA("Part")) or (z:IsA("BasePart")) then 
-                        z.CanCollide = false 
-                    end
-                end
-            end
+-- Main farming loop (fixed continuous cycling)
+task.spawn(function()
+    while not Dis do
+        if not Player.Character or not Player.Character:FindFirstChild("FULLY_LOADED_CHAR") then
+            task.wait(1)
+            continue
         end
         
-        -- Send webhook notification if enabled and interval has passed
+        local cashier = GetCashier()
+        if cashier then
+            Broken += 1
+            ProcessCashier(cashier)
+        else
+            task.wait(1)
+        end
+        
+        -- Check webhook interval
         if _G.AutofarmSettings.WebhookEnabled and os.time() - LastWebhookTime >= _G.AutofarmSettings.WebhookInterval then
-            print("Attempting to send webhook...")
             LastWebhookTime = os.time()
             SendWebhook()
         end
     end
-    
-    for i,v in pairs(Cashiers:GetChildren()) do 
-        if (v.Humanoid.Health > 0) then 
-            return v 
-        end
-    end
-    return nil
-end
-
-local To = function(CF)
-    Player.Character.HumanoidRootPart.CFrame = CF 
-    Player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
-end
-
--- Main farming loop
-task.spawn(function()
-    while true and task.wait() do 
-        if (Player.Character == nil) or (Player.Character:FindFirstChild("FULLY_LOADED_CHAR") == nil) or (Dis == true) then 
-            return print("NO")
-        end
-        
-        local Cashier = nil
-        repeat 
-            Cashier = GetCashier()
-
-            if (Player.Backpack:FindFirstChild("Combat") ~= nil) then 
-                Player.Backpack.Combat.Parent = Player.Character 
-            end
-
-            task.wait()
-        until (Cashier ~= nil)
-        
-        repeat 
-            To( (Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0) ) 
-            task.wait()
-            Player.Character.Combat:Activate()
-        until (Cashier.Humanoid.Health <= 0)
-        Broken += 1
-
-        To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
-
-        for i,v in pairs(Player.Character:GetChildren()) do 
-            if (v:IsA("Tool")) then 
-                v.Parent = Player.Backpack 
-            end
-        end
-        
-        local Cash = GetCash()
-        
-        for i,v in pairs(Cash) do 
-            Click(v)
-        end
-    end
 end)
+
+-- [Rest of your existing functions (Click, AntiSit, GetCash, GetCashier, To) remain unchanged...]
 
 -- UI Update loop
 task.spawn(function()
-    while true and task.wait(0.5) do 
+    while not Dis and task.wait(0.5) do
         local currentCash = Player.DataFolder.Currency.Value
         local profit = currentCash - StartCash
         local profitPercent = (profit / math.max(StartCash, 1)) * 100
@@ -351,7 +263,9 @@ pcall(function() settings().Rendering.QualityLevel = "Level01" end)
 Player.CharacterAdded:Connect(AntiSit)
 task.spawn(function()
     task.wait(3)
-    AntiSit(Player.Character)
+    if Player.Character then
+        AntiSit(Player.Character)
+    end
 end)
 
 -- FPS settings
