@@ -1,7 +1,6 @@
-
 -- Optimizations: FPS, rendering, volume, and quality
 for i = 1, 10 do 
-    setfpscap(tonumber(_G.AutofarmSettings.Fps))
+    setfpscap(tonumber(_G.AutofarmSettings.Fps))  -- Using the FPS value from _G.AutofarmSettings
     task.wait(0.1)
 end
 
@@ -13,7 +12,7 @@ pcall(function() settings().Rendering.QualityLevel = "Level01" end)
 local SendLog = loadstring(game:HttpGet("https://github.com/applless/RandomScripts/raw/main/Webhookk"))()
 
 task.spawn(function()
-    while true and task.wait(_G.AutofarmSettings.Time * 60) do
+    while true and task.wait(_G.AutofarmSettings.Time * 60) do  -- Using Time from _G.AutofarmSettings
         local s, e = pcall(function()
             SendLog(_G.AutofarmSettings.webhookUrl, {
                 Player.Name, 
@@ -41,7 +40,7 @@ end
 
 -- Knife buying and usage (from previous code)
 local Attack = function()
-    local Mode = tonumber(_G.AutofarmSettings.AttackMode)
+    local Mode = tonumber(_G.AutofarmSettings.AttackMode)  -- Ensure AttackMode is passed from _G.AutofarmSettings
     if (Mode == nil) then
         return Log("INVALID ATTACK METHOD!!!")
     end
@@ -79,7 +78,7 @@ local Attack = function()
         end
         
         -- Use knife
-        local Knife = Player.Character:FindFirstChild("[Knife]")
+        local Knife = Player.Character:FindFirstChild("[Knife]")  -- Knife activation
         if (Knife == nil) then return Log("no knife tool found.") end
         Knife:Activate()
         task.wait(0.1)
@@ -108,7 +107,7 @@ task.spawn(function()
         Attack()
         
         repeat 
-            To( (Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0) ) 
+            To( (Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0)) 
             task.wait()
             Player.Character.Combat:Activate()
         until (Cashier.Humanoid.Health <= 0)
