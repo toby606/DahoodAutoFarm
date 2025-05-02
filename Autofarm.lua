@@ -66,21 +66,25 @@ _G.Disable = function()
     game:GetService("CoreGui").abcdefg:Destroy()
 end
 
+-- Webhook logic
 local function SendWebhook()
-    if not _G.AutofarmSettings.WebhookEnabled or _G.AutofarmSettings.WebhookUrl == "" then 
+    -- Check if webhook is enabled and URL is set
+    if not _G.AutofarmSettings.WebhookEnabled or _G.AutofarmSettings.WebhookUrl == "" then
         warn("Webhook not enabled or URL not set")
-        return 
+        return
     end
 
+    -- Get the current cash and calculate profit
     local currentCash = Player.DataFolder.Currency.Value
     local profit = currentCash - StartCash
     local profitPercent = (profit / math.max(StartCash, 1)) * 100
 
+    -- Prepare the webhook data (embed format)
     local embed = {
         {
             ["title"] = "💰 AutoFarm Update - " .. Player.Name,
             ["description"] = "Current farming session statistics",
-            ["color"] = 65280, -- Green
+            ["color"] = 65280, -- Green color
             ["fields"] = {
                 {
                     ["name"] = "Current Cash",
@@ -119,14 +123,17 @@ local function SendWebhook()
         }
     }
 
+    -- Prepare data for the webhook post request
     local data = {
         ["embeds"] = embed,
         ["username"] = "AutoFarm Notifier",
         ["avatar_url"] = "https://cdn.discordapp.com/attachments/123456789012345678/123456789012345678/money_bag.png"
     }
 
+    -- Get the HttpService
     local HttpService = game:GetService("HttpService")
 
+    -- Attempt to send the webhook data
     local success, response = pcall(function()
         return HttpService:PostAsync(
             _G.AutofarmSettings.WebhookUrl,
@@ -135,12 +142,38 @@ local function SendWebhook()
         )
     end)
 
+    -- Handle response and errors
     if not success then
         warn("Failed to send webhook:", response)
     else
         print("Webhook sent successfully")
     end
 end
+
+-- Main farming loop (fixed continuous cycling)
+task.spawn(function()
+    while not Dis do
+        if not Player.Character or not Player.Character:FindFirstChild("FULLY_LOADED_CHAR") then
+            task.wait(1)
+            continue
+        end
+        
+        -- Process a cashier
+        local cashier = GetCashier()
+        if cashier then
+            Broken += 1
+            ProcessCashier(cashier)
+        else
+            task.wait(1)
+        end
+        
+        -- Check if it's time to send a webhook based on the interval
+        if _G.AutofarmSettings.WebhookEnabled and os.time() - LastWebhookTime >= _G.AutofarmSettings.WebhookInterval then
+            LastWebhookTime = os.time()
+            SendWebhook()  -- Call the webhook send function
+        end
+    end
+end)
 
 -- Improved cashier processing function
 local function ProcessCashier(cashier)
