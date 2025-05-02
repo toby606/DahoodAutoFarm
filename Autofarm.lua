@@ -1,12 +1,3 @@
-_G.AutofarmSettings = { 
-    Fps = 30,                          -- Frames per second cap
-    Saver = false,                      -- Whether to save or not
-    webhookUrl = "",                    -- Webhook URL for logging
-    Time = 5                            -- Time interval in minutes for each webhook to send
-}
-
--- Load and execute the autofarm script
-loadstring(game:HttpGet("https://raw.githubusercontent.com/toby606/DahoodAutoFarm/refs/heads/main/Autofarm.lua"))()
 
 -- Optimizations: FPS, rendering, volume, and quality
 for i = 1, 10 do 
