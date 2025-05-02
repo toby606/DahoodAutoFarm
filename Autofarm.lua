@@ -28,6 +28,9 @@ local Broken = 0
 local StartTick = os.time()
 local LastCycleTime = os.time()
 local CycleCount = 0
+local MAX_TIME_PER_CASHIER = 12 -- Seconds per cashier attempt
+local VAULT_POSITION = CFrame.new(-726.49, -22.47, -243.32) -- Default vault position
+local cashierBlacklist = {}
 
 _G.Disable = function()
     Dis = true
@@ -59,7 +62,6 @@ end)
 
 local Click = function(Part)
     local Input = game:GetService("VirtualInputManager")
-    local Pos = workspace.Camera:WorldToScreenPoint(Part.Position)
     local T = os.time()
 
     if (Part:GetAttribute("OriginalPos") == nil) then 
@@ -126,22 +128,20 @@ local ResetCashiers = function()
     end
     CycleCount = CycleCount + 1
     LastCycleTime = os.time()
+    cashierBlacklist = {}
+    print("Cashiers reset - Cycle:", CycleCount)
 end
 
 local GetCashier = function()
-    -- Reset cashiers every 4 minutes or if no cashiers are alive
     if os.time() - LastCycleTime >= 240 then
         ResetCashiers()
     end
     
     for i,v in pairs(Cashiers:GetChildren()) do 
-        if (v.Humanoid.Health > 0) then 
+        if (v.Humanoid.Health > 0) and not cashierBlacklist[v] then 
             return v 
         end
     end
-    
-    -- If no cashiers are alive, reset them immediately
-    ResetCashiers()
     return nil
 end
 
@@ -150,52 +150,97 @@ local To = function(CF)
     Player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
 end
 
+local GoToVault = function()
+    print("Going to vault")
+    To(VAULT_POSITION)
+    task.wait(3)
+    cashierBlacklist = {}
+end
+
+-- Main farming loop
 task.spawn(function()
     while true and task.wait() do 
         if (Player.Character == nil) or (Player.Character:FindFirstChild("FULLY_LOADED_CHAR") == nil) or (Dis == true) then 
-            return print("NO")
+            return print("Stopped: Missing character or disabled")
         end
         
-        local Cashier = nil
-        repeat 
-            Cashier = GetCashier()
+        -- Equip combat tool
+        if (Player.Backpack:FindFirstChild("Combat") ~= nil) then 
+            Player.Backpack.Combat.Parent = Player.Character 
+            task.wait(0.5)
+        end
 
-            if (Player.Backpack:FindFirstChild("Combat") ~= nil) then 
-                Player.Backpack.Combat.Parent = Player.Character 
-            end
-
-            task.wait(1) -- Added delay to prevent spamming
-        until (Cashier ~= nil)
+        local cashier = GetCashier()
         
-        repeat 
-            To( (Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0) ) 
+        if not cashier then
+            print("No available cashiers - going to vault")
+            GoToVault()
+            ResetCashiers()
+            task.wait(5)
+            continue
+        end
+
+        -- Mark cashier as attempted
+        cashierBlacklist[cashier] = true
+        local startTime = os.time()
+        local success = false
+        
+        -- Attempt to break cashier with timeout
+        while os.time() - startTime < MAX_TIME_PER_CASHIER do
+            if cashier.Humanoid.Health <= 0 then
+                success = true
+                break
+            end
+            
+            To((cashier.Head.CFrame + Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0))
+            if Player.Character:FindFirstChild("Combat") then
+                Player.Character.Combat:Activate()
+            end
             task.wait(0.1)
-            Player.Character.Combat:Activate()
-        until (Cashier.Humanoid.Health <= 0) or (Cashier == nil)
-        
-        if Cashier then
-            Broken = Broken + 1
-            To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
+        end
 
-            for i,v in pairs(Player.Character:GetChildren()) do 
-                if (v:IsA("Tool")) then 
-                    v.Parent = Player.Backpack 
-                end
-            end
+        if success then
+            Broken = Broken + 1
+            print("Cashier broken - collecting money")
             
-            local Cash = GetCash()
-            
-            for i,v in pairs(Cash) do 
-                Click(v)
+            -- Collect money drops
+            local cashDrops = GetCash()
+            for _, drop in pairs(cashDrops) do
+                Click(drop)
+                task.wait(0.2)
             end
+        else
+            print("Timeout on cashier - moving on")
+        end
+
+        -- Check if all cashiers attempted
+        local allAttempted = true
+        for _, c in pairs(Cashiers:GetChildren()) do
+            if c.Humanoid.Health > 0 and not cashierBlacklist[c] then
+                allAttempted = false
+                break
+            end
+        end
+
+        if allAttempted then
+            print("All cashiers attempted - going to vault")
+            GoToVault()
+            ResetCashiers()
+            task.wait(5)
         end
     end
 end)
 
+-- UI Update loop
 local StartCash = Player.DataFolder.Currency.Value
 task.spawn(function()
     while true and task.wait(0.5) do 
-        TL.Text = "\n@"..Player.Name.."\n$"..tostring(Player.DataFolder.Currency.Value):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value)-1)/3)):reverse().."\nATMS: "..tostring(Broken).."\n"..string.format("%02i:%02i:%02i", (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60).."\nProfit: $"..tostring(Player.DataFolder.Currency.Value-StartCash):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value-StartCash)-1)/3)):reverse().."\nCycle: "..string.format("%02i:%02i", (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60).." ("..CycleCount..")\n"..tostring(GetCashier()).."   "
+        TL.Text = "\n@"..Player.Name.."\n$"..tostring(Player.DataFolder.Currency.Value):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value)-1)/3)):reverse()..
+            "\nATMS: "..tostring(Broken)..
+            "\n"..string.format("%02i:%02i:%02i", (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60)..
+            "\nProfit: $"..tostring(Player.DataFolder.Currency.Value-StartCash):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value-StartCash)-1)/3)):reverse()..
+            "\nCycle: "..string.format("%02i:%02i", (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60).." ("..CycleCount..")"..
+            "\nStatus: "..(next(cashierBlacklist) and "Farming" or "Resetting")
     end
 end)
 
@@ -227,3 +272,11 @@ if (_G.AutofarmSettings.Saver == true) then
 else 
     SG.Enabled = false
 end
+
+-- Manual reset keybind
+game:GetService("UserInputService").InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.R then
+        ResetCashiers()
+        GoToVault()
+    end
+end)
