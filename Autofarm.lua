@@ -296,5 +296,14 @@ for i = 1, 10 do
     task.wait(0.1)
 end
 
--- Always keep the screen blacked out but show stats
-game:GetService("RunService"):Set3dRenderingEnabled(false)
+-- Modified Saver mode logic
+if (_G.AutofarmSettings.Saver == true) then 
+    game:GetService("RunService"):Set3dRenderingEnabled(false)  -- Black out the game
+    BlackFrame.Visible = true  -- Show black background
+else 
+    game:GetService("RunService"):Set3dRenderingEnabled(true)  -- Show game normally
+    BlackFrame.Visible = false  -- Hide black background
+end
+
+-- Always show stats regardless of Saver mode
+MainFrame.Visible = true
