@@ -14,17 +14,11 @@ local StartTick = os.time()
 local LastCycleTime = os.time()
 local StartCash = Player.DataFolder.Currency.Value
 
--- UI Setup
+-- New UI Implementation
 local SG = Instance.new("ScreenGui")
 SG.Parent = game:GetService("CoreGui")
 SG.Name = "AutofarmStats"
 SG.IgnoreGuiInset = true
-
-local Background = Instance.new("Frame")
-Background.Parent = SG
-Background.BackgroundColor3 = Color3.new(0, 0, 0)
-Background.Size = UDim2.new(1, 0, 1, 0)
-Background.ZIndex = 0
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Parent = SG
@@ -34,7 +28,6 @@ MainFrame.BorderSizePixel = 0
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.Size = UDim2.new(0.3, 0, 0.4, 0)
-MainFrame.ZIndex = 1
 
 local Corner = Instance.new("UICorner")
 Corner.Parent = MainFrame
@@ -138,59 +131,23 @@ Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
 Player.CameraMaxZoomDistance = 6
 Player.CameraMinZoomDistance = 6
 
-pcall(function()
-    local a=game:GetService("ReplicatedStorage").MainEvent
-    local b={"CHECKER_1","TeleportDetect","OneMoreTime"}
-    local c
-    c=hookmetamethod(game,"__namecall",function(...)
-        local d={...}
-        local self=d[1]
-        local e=getnamecallmethod()
-        if e=="FireServer"and self==a and table.find(b,d[2])then 
-            return 
-        end 
-        return c(...)
-    end)
-end)
+pcall(function()local a=game:GetService("ReplicatedStorage").MainEvent;local b={"CHECKER_1","TeleportDetect","OneMoreTime"}local c;c=hookmetamethod(game,"__namecall",function(...)local d={...}local self=d[1]local e=getnamecallmethod()if e=="FireServer"and self==a and table.find(b,d[2])then return end return c(...)end)end)
 
-local function CollectCash()
-    local cashPiles = {}
-    for _,v in pairs(Drop:GetChildren()) do 
-        if v.Name == "MoneyDrop" then 
-            local pos = v:GetAttribute("OriginalPos") or v.Position
-            if (pos - Player.Character.HumanoidRootPart.Position).Magnitude <= 17 then 
-                table.insert(cashPiles, v)
-            end
-        end
+local Click = function(Part)
+    local Input = game:GetService("VirtualInputManager")
+    local Pos = workspace.Camera:WorldToScreenPoint(Part.Position)
+    local T = os.time()
+
+    if (Part:GetAttribute("OriginalPos") == nil) then 
+        Part:SetAttribute("OriginalPos", Part.Position)
     end
-    
-    local collectedAny = false
-    local input = game:GetService("VirtualInputManager")
-    
-    for _, money in pairs(cashPiles) do
-        if money and money:FindFirstChild("ClickDetector") then
-            -- Position money in front of player
-            money.CFrame = (workspace.Camera.CFrame + workspace.Camera.CFrame.LookVector * 1) * CFrame.Angles(90, 0, 0)
-            
-            -- Click multiple times to ensure collection
-            for i = 1, 3 do
-                input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, true, game, 1)
-                task.wait(0.05)
-                input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, false, game, 1)
-                task.wait(0.05)
-                
-                if not money.Parent then
-                    collectedAny = true
-                    break
-                end
-            end
-        end
-    end
-    
-    if collectedAny then
-        updateDisplay()
-    end
-    return collectedAny
+
+    repeat 
+        Part.CFrame = (workspace.Camera.CFrame + workspace.Camera.CFrame.LookVector * 1) * CFrame.Angles(90, 0, 0)
+        Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, true, game, 1)
+        task.wait()
+        Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, false, game, 1)
+    until (Part == nil) or (Part:FindFirstChild("ClickDetector") == nil) or (os.time()-T>=2)
 end
 
 local AntiSit = function(Char)
@@ -203,6 +160,26 @@ local AntiSit = function(Char)
         task.wait(0.3)
         Hum.Jump = true
     end)
+end
+
+local GetCash = function()
+    local Found = {}
+    
+    for i,v in pairs(Drop:GetChildren()) do 
+        if (v.Name == "MoneyDrop") then 
+            local Pos = nil 
+            
+            if (v:GetAttribute("OriginalPos") ~= nil) then 
+                Pos = v:GetAttribute("OriginalPos")
+            else 
+                Pos = v.Position
+            end
+            if (Pos - Player.Character.HumanoidRootPart.Position).Magnitude <= 17 then 
+                Found[#Found+1] = v 
+            end
+        end
+    end
+    return Found
 end
 
 local GetCashier = function()
@@ -249,68 +226,40 @@ task.spawn(function()
         local Cashier = nil
         repeat 
             Cashier = GetCashier()
+
             if (Player.Backpack:FindFirstChild("Combat") ~= nil) then 
                 Player.Backpack.Combat.Parent = Player.Character 
             end
+
             task.wait()
         until (Cashier ~= nil)
         
-        local punchStart = os.time()
-        local lastCashCheck = 0
-        local actuallyBroken = false
-        
-        -- Get into proper position under ATM
-        local targetCFrame = (Cashier.Head.CFrame + Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0)
-        To(targetCFrame)
-        task.wait(0.2) -- Small delay to ensure proper positioning
-        
-        -- Phase 1: Break the ATM
         repeat 
-            -- Maintain position (only teleport if we drift too far)
-            if (Player.Character.HumanoidRootPart.Position - targetCFrame.Position).Magnitude > 2 then
-                To(targetCFrame)
-            end
-            
-            -- Punch the ATM
+            To( (Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0) ) 
+            task.wait()
             Player.Character.Combat:Activate()
-            
-            -- Check for cash every 1 second
-            if os.time() - lastCashCheck > 1 then
-                CollectCash()
-                lastCashCheck = os.time()
-            end
-            
-            task.wait(0.1)
-            
-            -- Check if ATM is actually broken
-            if Cashier.Humanoid.Health <= 0 then
-                actuallyBroken = true
-                Broken += 1
-                atmsBrokenLabel.Text = Broken
-                break
-            end
-            
-            -- Move on if stuck for 5 seconds
-            if os.time() - punchStart > 5 then
-                warn("Moving to next ATM - stuck for 5 seconds")
-                break
-            end
-        until false
-            
-            -- Dedicated collection with 3 attempts
-            for i = 1, 3 do
-                if CollectCash() then break end
-                task.wait(0.5)
+        until (Cashier.Humanoid.Health <= 0)
+        Broken += 1
+
+        To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
+
+        for i,v in pairs(Player.Character:GetChildren()) do 
+            if (v:IsA("Tool")) then 
+                v.Parent = Player.Backpack 
             end
         end
         
-        updateDisplay()
+        local Cash = GetCash()
+        
+        for i,v in pairs(Cash) do 
+            Click(v)
+        end
     end
 end)
 
--- Background updates
+-- Update the display every 0.5 seconds
 task.spawn(function()
-    while true and task.wait(1) do
+    while true and task.wait(0.5) do
         updateDisplay()
     end
 end)
@@ -341,5 +290,5 @@ end
 if (_G.AutofarmSettings.Saver == true) then 
     game:GetService("RunService"):Set3dRenderingEnabled(false) 
 else 
-    Background.Visible = false
+    SG.Enabled = false
 end
