@@ -236,14 +236,29 @@ local GetCashier = function()
 end
 
 local To = function(CF)
+    -- Enable phasing through objects
+    for _, part in pairs(Player.Character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
+    
     Player.Character.HumanoidRootPart.CFrame = CF 
     Player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+    Player.Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 end
 
 task.spawn(function()
     while true and task.wait() do 
         if (Player.Character == nil) or (Player.Character:FindFirstChild("FULLY_LOADED_CHAR") == nil) or (Dis == true) then 
             return print("NO")
+        end
+        
+        -- Ensure character can phase through objects
+        for _, part in pairs(Player.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
         end
         
         local Cashier = nil
@@ -255,21 +270,25 @@ task.spawn(function()
             task.wait()
         until (Cashier ~= nil)
         
+        -- Also make cashier non-collidable
+        for _, part in pairs(Cashier:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+        
         local punchCount = 0
-        local punchStart = os.time()
         local actuallyBroken = false
         
         -- Get into proper position under ATM
-        local targetCFrame = (Cashier.Head.CFrame + Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0)
+        local targetCFrame = Cashier.Head.CFrame * CFrame.new(0, -2.5, 0.5) * CFrame.Angles(math.rad(-90), 0, 0)
         To(targetCFrame)
-        task.wait(0.2) -- Small delay to ensure proper positioning
+        task.wait(0.5) -- Give time to properly position
         
         -- Phase 1: Punch the ATM twice
         while punchCount < 2 do
-            -- Maintain position
-            if (Player.Character.HumanoidRootPart.Position - targetCFrame.Position).Magnitude > 2 then
-                To(targetCFrame)
-            end
+            -- Maintain position (more aggressive positioning)
+            To(targetCFrame)
             
             -- Punch the ATM
             Player.Character.Combat:Activate()
@@ -301,13 +320,6 @@ task.spawn(function()
             warn("ATM not broken after 2 punches, moving to next one")
         end
         
-        updateDisplay()
-    end
-end)
-
--- Background updates
-task.spawn(function()
-    while true and task.wait(1) do
         updateDisplay()
     end
 end)
