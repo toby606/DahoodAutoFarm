@@ -115,7 +115,7 @@ local function countBrokenCashiers()
     return broken
 end
 
-local function updateDisplay(forceUpdate)
+local function updateDisplay()
     local currentCash = Player.DataFolder.Currency.Value
     local profit = currentCash - StartCash
     
@@ -126,9 +126,6 @@ local function updateDisplay(forceUpdate)
     cycleLabel.Text = string.format("%02i:%02i", (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60)
     cashiersLabel.Text = #Cashiers:GetChildren() - countBrokenCashiers()
 end
-
--- Initial update
-updateDisplay(true)
 
 _G.Disable = function()
     Dis = true
@@ -141,7 +138,6 @@ Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
 Player.CameraMaxZoomDistance = 6
 Player.CameraMinZoomDistance = 6
 
--- Anti-cheat bypass
 pcall(function()
     local a=game:GetService("ReplicatedStorage").MainEvent
     local b={"CHECKER_1","TeleportDetect","OneMoreTime"}
@@ -157,23 +153,44 @@ pcall(function()
     end)
 end)
 
-local Click = function(Part)
-    local Input = game:GetService("VirtualInputManager")
-    local T = os.time()
-
-    if (Part:GetAttribute("OriginalPos") == nil) then 
-        Part:SetAttribute("OriginalPos", Part.Position)
+local function CollectCash()
+    local cashPiles = {}
+    for _,v in pairs(Drop:GetChildren()) do 
+        if v.Name == "MoneyDrop" then 
+            local pos = v:GetAttribute("OriginalPos") or v.Position
+            if (pos - Player.Character.HumanoidRootPart.Position).Magnitude <= 17 then 
+                table.insert(cashPiles, v)
+            end
+        end
     end
-
-    repeat 
-        Part.CFrame = (workspace.Camera.CFrame + workspace.Camera.CFrame.LookVector * 1) * CFrame.Angles(90, 0, 0)
-        Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, true, game, 1)
-        task.wait()
-        Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, false, game, 1)
-        
-        -- Update display immediately when money is clicked
-        updateDisplay(true)
-    until (Part == nil) or (Part:FindFirstChild("ClickDetector") == nil) or (os.time()-T>=2)
+    
+    local collectedAny = false
+    local input = game:GetService("VirtualInputManager")
+    
+    for _, money in pairs(cashPiles) do
+        if money and money:FindFirstChild("ClickDetector") then
+            -- Position money in front of player
+            money.CFrame = (workspace.Camera.CFrame + workspace.Camera.CFrame.LookVector * 1) * CFrame.Angles(90, 0, 0)
+            
+            -- Click multiple times to ensure collection
+            for i = 1, 3 do
+                input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, true, game, 1)
+                task.wait(0.05)
+                input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, false, game, 1)
+                task.wait(0.05)
+                
+                if not money.Parent then
+                    collectedAny = true
+                    break
+                end
+            end
+        end
+    end
+    
+    if collectedAny then
+        updateDisplay()
+    end
+    return collectedAny
 end
 
 local AntiSit = function(Char)
@@ -186,24 +203,6 @@ local AntiSit = function(Char)
         task.wait(0.3)
         Hum.Jump = true
     end)
-end
-
-local GetCash = function()
-    local Found = {}
-    for i,v in pairs(Drop:GetChildren()) do 
-        if (v.Name == "MoneyDrop") then 
-            local Pos = nil 
-            if (v:GetAttribute("OriginalPos") ~= nil) then 
-                Pos = v:GetAttribute("OriginalPos")
-            else 
-                Pos = v.Position
-            end
-            if (Pos - Player.Character.HumanoidRootPart.Position).Magnitude <= 17 then 
-                Found[#Found+1] = v 
-            end
-        end
-    end
-    return Found
 end
 
 local GetCashier = function()
@@ -241,15 +240,6 @@ local To = function(CF)
     Player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
 end
 
-local function collectNearbyMoney()
-    local Cash = GetCash()
-    for i,v in pairs(Cash) do 
-        Click(v)
-    end
-    -- Update display after collecting all money
-    updateDisplay(true)
-end
-
 task.spawn(function()
     while true and task.wait() do 
         if (Player.Character == nil) or (Player.Character:FindFirstChild("FULLY_LOADED_CHAR") == nil) or (Dis == true) then 
@@ -267,43 +257,62 @@ task.spawn(function()
             task.wait()
         until (Cashier ~= nil)
         
-        local punchCount = 0
-        local startPunchTime = os.time()
+        local punchStart = os.time()
+        local lastCashCheck = 0
+        local actuallyBroken = false
         
+        -- Phase 1: Break the ATM
         repeat 
-            To((Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0))
-            task.wait()
+            -- Position and punch
+            To((Cashier.Head.CFrame + Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0))
             Player.Character.Combat:Activate()
-            punchCount = punchCount + 1
             
-            if punchCount >= 2 then
-                collectNearbyMoney()
-                if os.time() - startPunchTime > 5 then
-                    Broken += 1
-                    atmsBrokenLabel.Text = Broken -- Immediate update
-                    break
+            -- Check for cash every 1 second
+            if os.time() - lastCashCheck > 1 then
+                CollectCash()
+                lastCashCheck = os.time()
+            end
+            
+            task.wait(0.1)
+            
+            -- Check if ATM is actually broken
+            if Cashier.Humanoid.Health <= 0 then
+                actuallyBroken = true
+                Broken += 1
+                atmsBrokenLabel.Text = Broken
+                break
+            end
+            
+            -- Move on if stuck for 5 seconds (regardless of whether it's "broken" in UI)
+            if os.time() - punchStart > 5 then
+                warn("Moving to next ATM - stuck for 5 seconds")
+                break
+            end
+        until false
+        
+        -- Phase 2: Collect money if actually broken
+        if actuallyBroken then
+            To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
+            
+            -- Put away combat tool
+            for _,v in pairs(Player.Character:GetChildren()) do 
+                if v:IsA("Tool") then 
+                    v.Parent = Player.Backpack 
                 end
             end
-        until (Cashier.Humanoid.Health <= 0) or (os.time() - startPunchTime > 5)
-        
-        if Cashier.Humanoid.Health <= 0 then
-            Broken += 1
-            atmsBrokenLabel.Text = Broken -- Immediate update
-        end
-
-        To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
-
-        for i,v in pairs(Player.Character:GetChildren()) do 
-            if (v:IsA("Tool")) then 
-                v.Parent = Player.Backpack 
+            
+            -- Dedicated collection with 3 attempts
+            for i = 1, 3 do
+                if CollectCash() then break end
+                task.wait(0.5)
             end
         end
         
-        collectNearbyMoney()
+        updateDisplay()
     end
 end)
 
--- Background updates (less frequent)
+-- Background updates
 task.spawn(function()
     while true and task.wait(1) do
         updateDisplay()
