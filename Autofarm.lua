@@ -249,11 +249,9 @@ task.spawn(function()
         local Cashier = nil
         repeat 
             Cashier = GetCashier()
-
             if (Player.Backpack:FindFirstChild("Combat") ~= nil) then 
                 Player.Backpack.Combat.Parent = Player.Character 
             end
-
             task.wait()
         until (Cashier ~= nil)
         
@@ -261,10 +259,19 @@ task.spawn(function()
         local lastCashCheck = 0
         local actuallyBroken = false
         
+        -- Get into proper position under ATM
+        local targetCFrame = (Cashier.Head.CFrame + Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0)
+        To(targetCFrame)
+        task.wait(0.2) -- Small delay to ensure proper positioning
+        
         -- Phase 1: Break the ATM
         repeat 
-            -- Position and punch
-            To((Cashier.Head.CFrame + Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0))
+            -- Maintain position (only teleport if we drift too far)
+            if (Player.Character.HumanoidRootPart.Position - targetCFrame.Position).Magnitude > 2 then
+                To(targetCFrame)
+            end
+            
+            -- Punch the ATM
             Player.Character.Combat:Activate()
             
             -- Check for cash every 1 second
@@ -283,23 +290,12 @@ task.spawn(function()
                 break
             end
             
-            -- Move on if stuck for 5 seconds (regardless of whether it's "broken" in UI)
+            -- Move on if stuck for 5 seconds
             if os.time() - punchStart > 5 then
                 warn("Moving to next ATM - stuck for 5 seconds")
                 break
             end
         until false
-        
-        -- Phase 2: Collect money if actually broken
-        if actuallyBroken then
-            To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
-            
-            -- Put away combat tool
-            for _,v in pairs(Player.Character:GetChildren()) do 
-                if v:IsA("Tool") then 
-                    v.Parent = Player.Backpack 
-                end
-            end
             
             -- Dedicated collection with 3 attempts
             for i = 1, 3 do
