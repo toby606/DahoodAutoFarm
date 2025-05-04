@@ -20,6 +20,14 @@ SG.Parent = game:GetService("CoreGui")
 SG.Name = "AutofarmStats"
 SG.IgnoreGuiInset = true
 
+-- Black background frame
+local BlackFrame = Instance.new("Frame")
+BlackFrame.Parent = SG
+BlackFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+BlackFrame.Size = UDim2.new(1, 0, 1, 0)
+BlackFrame.ZIndex = 0
+
+-- Stats frame
 local MainFrame = Instance.new("Frame")
 MainFrame.Parent = SG
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
@@ -28,6 +36,7 @@ MainFrame.BorderSizePixel = 0
 MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 MainFrame.Size = UDim2.new(0.3, 0, 0.4, 0)
+MainFrame.ZIndex = 1
 
 local Corner = Instance.new("UICorner")
 Corner.Parent = MainFrame
@@ -287,8 +296,5 @@ for i = 1, 10 do
     task.wait(0.1)
 end
 
-if (_G.AutofarmSettings.Saver == true) then 
-    game:GetService("RunService"):Set3dRenderingEnabled(false) 
-else 
-    SG.Enabled = false
-end
+-- Always keep the screen blacked out but show stats
+game:GetService("RunService"):Set3dRenderingEnabled(false)
