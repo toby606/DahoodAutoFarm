@@ -255,8 +255,8 @@ task.spawn(function()
             task.wait()
         until (Cashier ~= nil)
         
+        local punchCount = 0
         local punchStart = os.time()
-        local lastCashCheck = 0
         local actuallyBroken = false
         
         -- Get into proper position under ATM
@@ -264,44 +264,41 @@ task.spawn(function()
         To(targetCFrame)
         task.wait(0.2) -- Small delay to ensure proper positioning
         
-        -- Phase 1: Break the ATM
-        repeat 
-            -- Maintain position (only teleport if we drift too far)
+        -- Phase 1: Punch the ATM twice
+        while punchCount < 2 do
+            -- Maintain position
             if (Player.Character.HumanoidRootPart.Position - targetCFrame.Position).Magnitude > 2 then
                 To(targetCFrame)
             end
             
             -- Punch the ATM
             Player.Character.Combat:Activate()
+            punchCount = punchCount + 1
+            task.wait(0.5)
             
-            -- Check for cash every 1 second
-            if os.time() - lastCashCheck > 1 then
-                CollectCash()
-                lastCashCheck = os.time()
-            end
-            
-            task.wait(0.1)
-            
-            -- Check if ATM is actually broken
+            -- Check if ATM is broken
             if Cashier.Humanoid.Health <= 0 then
                 actuallyBroken = true
                 Broken += 1
                 atmsBrokenLabel.Text = Broken
                 break
             end
-            
-            -- Move on if stuck for 5 seconds
-            if os.time() - punchStart > 5 then
-                warn("Moving to next ATM - stuck for 5 seconds")
-                break
-            end
-        until false
-            
-            -- Dedicated collection with 3 attempts
-            for i = 1, 3 do
-                if CollectCash() then break end
-                task.wait(0.5)
-            end
+        end
+        
+        -- Put combat away
+        if Player.Character:FindFirstChild("Combat") then
+            Player.Character.Combat.Parent = Player.Backpack
+        end
+        
+        -- Collect cash
+        for i = 1, 3 do
+            if CollectCash() then break end
+            task.wait(0.5)
+        end
+        
+        -- If ATM isn't broken after 2 punches, move to next one
+        if not actuallyBroken then
+            warn("ATM not broken after 2 punches, moving to next one")
         end
         
         updateDisplay()
