@@ -5,21 +5,6 @@ end
 
 repeat task.wait(0.1) until (game:GetService("Players").LocalPlayer) and (game:GetService("Players").LocalPlayer.Character)
 
-local SG = Instance.new("ScreenGui")
-SG.Parent = game:GetService("CoreGui")
-SG.Name = "abcdefg"
-SG.IgnoreGuiInset = true 
-local TL = Instance.new("TextLabel")
-TL.Parent = SG 
-TL.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-TL.Active = false
-TL.Font = Enum.Font.MontserratMedium
-TL.TextColor3 = Color3.fromRGB(200, 200, 200)
-TL.TextSize = 24
-TL.AnchorPoint = Vector2.new(0.5, 0.5)
-TL.Position = UDim2.new(0.5, 0, 0.5, 0)
-TL.Size = UDim2.new(1, 0, 1, 0)
-
 local Player = game:GetService("Players").LocalPlayer
 local Cashiers = workspace.Cashiers 
 local Drop = workspace.Ignored.Drop
@@ -27,25 +12,153 @@ local Dis = false
 local Broken = 0 
 local StartTick = os.time()
 local LastCycleTime = os.time()
+local StartCash = Player.DataFolder.Currency.Value
+
+-- UI Setup
+local SG = Instance.new("ScreenGui")
+SG.Parent = game:GetService("CoreGui")
+SG.Name = "AutofarmStats"
+SG.IgnoreGuiInset = true
+
+local Background = Instance.new("Frame")
+Background.Parent = SG
+Background.BackgroundColor3 = Color3.new(0, 0, 0)
+Background.Size = UDim2.new(1, 0, 1, 0)
+Background.ZIndex = 0
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Parent = SG
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+MainFrame.BackgroundTransparency = 0.3
+MainFrame.BorderSizePixel = 0
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+MainFrame.Size = UDim2.new(0.3, 0, 0.4, 0)
+MainFrame.ZIndex = 1
+
+local Corner = Instance.new("UICorner")
+Corner.Parent = MainFrame
+Corner.CornerRadius = UDim.new(0.05, 0)
+
+local Title = Instance.new("TextLabel")
+Title.Parent = MainFrame
+Title.Text = "AUTOFARM STATS"
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 28
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.BackgroundTransparency = 1
+Title.Size = UDim2.new(1, 0, 0.15, 0)
+Title.Position = UDim2.new(0, 0, 0.05, 0)
+
+local Username = Instance.new("TextLabel")
+Username.Parent = MainFrame
+Username.Text = "@"..Player.Name
+Username.Font = Enum.Font.GothamMedium
+Username.TextSize = 18
+Username.TextColor3 = Color3.fromRGB(200, 200, 200)
+Username.BackgroundTransparency = 1
+Username.Size = UDim2.new(1, 0, 0.1, 0)
+Username.Position = UDim2.new(0, 0, 0.2, 0)
+
+local StatsContainer = Instance.new("Frame")
+StatsContainer.Parent = MainFrame
+StatsContainer.BackgroundTransparency = 1
+StatsContainer.Size = UDim2.new(0.9, 0, 0.6, 0)
+StatsContainer.Position = UDim2.new(0.05, 0, 0.3, 0)
+
+local function createStatLabel(name, yPosition)
+    local frame = Instance.new("Frame")
+    frame.Parent = StatsContainer
+    frame.BackgroundTransparency = 1
+    frame.Size = UDim2.new(1, 0, 0.15, 0)
+    frame.Position = UDim2.new(0, 0, yPosition, 0)
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Parent = frame
+    nameLabel.Text = name
+    nameLabel.Font = Enum.Font.GothamMedium
+    nameLabel.TextSize = 16
+    nameLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Size = UDim2.new(0.5, 0, 1, 0)
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Parent = frame
+    valueLabel.Name = "Value"
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.TextSize = 16
+    valueLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Size = UDim2.new(0.5, 0, 1, 0)
+    valueLabel.Position = UDim2.new(0.5, 0, 0, 0)
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    
+    return valueLabel
+end
+
+-- Create all stat labels
+local totalCashLabel = createStatLabel("TOTAL CASH", 0)
+local profitLabel = createStatLabel("PROFIT", 0.15)
+local atmsBrokenLabel = createStatLabel("ATMS BROKEN", 0.3)
+local cycleLabel = createStatLabel("CURRENT CYCLE", 0.45)
+local timeLabel = createStatLabel("TIME RUNNING", 0.6)
+local cashiersLabel = createStatLabel("CASHIERS UP", 0.75)
+
+local function countBrokenCashiers()
+    local broken = 0
+    for _,v in pairs(Cashiers:GetChildren()) do 
+        if v.Humanoid.Health <= 0 then
+            broken = broken + 1
+        end
+    end
+    return broken
+end
+
+local function updateDisplay(forceUpdate)
+    local currentCash = Player.DataFolder.Currency.Value
+    local profit = currentCash - StartCash
+    
+    totalCashLabel.Text = "$"..tostring(currentCash):reverse():gsub("...","%0,",math.floor((#tostring(currentCash)-1)/3)):reverse()
+    profitLabel.Text = "$"..tostring(profit):reverse():gsub("...","%0,",math.floor((#tostring(profit)-1)/3)):reverse()
+    atmsBrokenLabel.Text = Broken
+    timeLabel.Text = string.format("%02i:%02i:%02i", (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60)
+    cycleLabel.Text = string.format("%02i:%02i", (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60)
+    cashiersLabel.Text = #Cashiers:GetChildren() - countBrokenCashiers()
+end
+
+-- Initial update
+updateDisplay(true)
 
 _G.Disable = function()
     Dis = true
     game:GetService("RunService"):Set3dRenderingEnabled(true)
     setfpscap(60)
-    game:GetService("CoreGui").abcdefg:Destroy()
+    game:GetService("CoreGui").AutofarmStats:Destroy()
 end
 
 Player.DevCameraOcclusionMode = Enum.DevCameraOcclusionMode.Invisicam
 Player.CameraMaxZoomDistance = 6
 Player.CameraMinZoomDistance = 6
 
-TL.Text = "\n@"..Player.Name.."\n$999,999,999"
-
-pcall(function()local a=game:GetService("ReplicatedStorage").MainEvent;local b={"CHECKER_1","TeleportDetect","OneMoreTime"}local c;c=hookmetamethod(game,"__namecall",function(...)local d={...}local self=d[1]local e=getnamecallmethod()if e=="FireServer"and self==a and table.find(b,d[2])then return end return c(...)end)end)
+-- Anti-cheat bypass
+pcall(function()
+    local a=game:GetService("ReplicatedStorage").MainEvent
+    local b={"CHECKER_1","TeleportDetect","OneMoreTime"}
+    local c
+    c=hookmetamethod(game,"__namecall",function(...)
+        local d={...}
+        local self=d[1]
+        local e=getnamecallmethod()
+        if e=="FireServer"and self==a and table.find(b,d[2])then 
+            return 
+        end 
+        return c(...)
+    end)
+end)
 
 local Click = function(Part)
     local Input = game:GetService("VirtualInputManager")
-    local Pos = workspace.Camera:WorldToScreenPoint(Part.Position)
     local T = os.time()
 
     if (Part:GetAttribute("OriginalPos") == nil) then 
@@ -57,6 +170,9 @@ local Click = function(Part)
         Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, true, game, 1)
         task.wait()
         Input:SendMouseButtonEvent(workspace.Camera.ViewportSize.X/2, workspace.Camera.ViewportSize.Y/2, 0, false, game, 1)
+        
+        -- Update display immediately when money is clicked
+        updateDisplay(true)
     until (Part == nil) or (Part:FindFirstChild("ClickDetector") == nil) or (os.time()-T>=2)
 end
 
@@ -74,11 +190,9 @@ end
 
 local GetCash = function()
     local Found = {}
-    
     for i,v in pairs(Drop:GetChildren()) do 
         if (v.Name == "MoneyDrop") then 
             local Pos = nil 
-            
             if (v:GetAttribute("OriginalPos") ~= nil) then 
                 Pos = v:GetAttribute("OriginalPos")
             else 
@@ -93,10 +207,8 @@ local GetCash = function()
 end
 
 local GetCashier = function()
-    -- Check if 4 minutes have passed to reset cashiers
-    if os.time() - LastCycleTime >= 240 then -- 240 seconds = 4 minutes
+    if os.time() - LastCycleTime >= 240 then
         LastCycleTime = os.time()
-        -- Reset cashiers to their original positions
         for i,v in pairs(Cashiers:GetChildren()) do 
             if (i == 15) then 
                 v:MoveTo(Vector3.new(-622.948, 24, -286.52))
@@ -129,6 +241,15 @@ local To = function(CF)
     Player.Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
 end
 
+local function collectNearbyMoney()
+    local Cash = GetCash()
+    for i,v in pairs(Cash) do 
+        Click(v)
+    end
+    -- Update display after collecting all money
+    updateDisplay(true)
+end
+
 task.spawn(function()
     while true and task.wait() do 
         if (Player.Character == nil) or (Player.Character:FindFirstChild("FULLY_LOADED_CHAR") == nil) or (Dis == true) then 
@@ -146,12 +267,29 @@ task.spawn(function()
             task.wait()
         until (Cashier ~= nil)
         
+        local punchCount = 0
+        local startPunchTime = os.time()
+        
         repeat 
-            To( (Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0) ) 
+            To((Cashier.Head.CFrame+Vector3.new(0, -2.5, 0)) * CFrame.Angles(math.rad(90), 0, 0))
             task.wait()
             Player.Character.Combat:Activate()
-        until (Cashier.Humanoid.Health <= 0)
-        Broken += 1
+            punchCount = punchCount + 1
+            
+            if punchCount >= 2 then
+                collectNearbyMoney()
+                if os.time() - startPunchTime > 5 then
+                    Broken += 1
+                    atmsBrokenLabel.Text = Broken -- Immediate update
+                    break
+                end
+            end
+        until (Cashier.Humanoid.Health <= 0) or (os.time() - startPunchTime > 5)
+        
+        if Cashier.Humanoid.Health <= 0 then
+            Broken += 1
+            atmsBrokenLabel.Text = Broken -- Immediate update
+        end
 
         To(Cashier.Head.CFrame + Cashier.Head.CFrame.LookVector * Vector3.new(0, 2, 0))
 
@@ -161,19 +299,14 @@ task.spawn(function()
             end
         end
         
-        local Cash = GetCash()
-        
-        for i,v in pairs(Cash) do 
-            Click(v)
-        end
+        collectNearbyMoney()
     end
 end)
 
-local StartCash = Player.DataFolder.Currency.Value
+-- Background updates (less frequent)
 task.spawn(function()
-    while true and task.wait(0.5) do 
-        print(TL.Text)
-        TL.Text = "\n@"..Player.Name.."\n$"..tostring(Player.DataFolder.Currency.Value):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value)-1)/3)):reverse().."\nATMS: "..tostring(Broken).."\n"..string.format("%02i:%02i:%02i", (os.time()-StartTick)/60^2, (os.time()-StartTick)/60%60, (os.time()-StartTick)%60).."\nProfit: $"..tostring(Player.DataFolder.Currency.Value-StartCash):reverse():gsub("...","%0,",math.floor((#tostring(Player.DataFolder.Currency.Value-StartCash)-1)/3)):reverse().."\nCycle: "..string.format("%02i:%02i", (os.time()-LastCycleTime)/60%60, (os.time()-LastCycleTime)%60).."\n"..tostring(GetCashier()).."   "
+    while true and task.wait(1) do
+        updateDisplay()
     end
 end)
 
@@ -203,5 +336,5 @@ end
 if (_G.AutofarmSettings.Saver == true) then 
     game:GetService("RunService"):Set3dRenderingEnabled(false) 
 else 
-    SG.Enabled = false
+    Background.Visible = false
 end
